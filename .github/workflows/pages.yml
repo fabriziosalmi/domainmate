@@ -35,6 +35,10 @@ jobs:
         run: |
           pip install -r requirements.txt
 
+      - name: 🤫 Inject Secret Config (Optional)
+        if: "${{ secrets.DOMAINMATE_CONFIG_CONTENT != '' }}"
+        run: echo "${{ secrets.DOMAINMATE_CONFIG_CONTENT }}" > config.yaml
+
       - name: 🔍 Run DomainMate Audit
         env:
           # Inject secrets if configured in Repo Settings

@@ -67,14 +67,36 @@ monitors:
   domain:
     enabled: true
     expiry_warning_days: 30
+    expiry_critical_days: 7
   ssl:
+    enabled: true
+    expiry_warning_days: 30
+    expiry_critical_days: 7
+  dns:
+    enabled: true
+    required_records:
+      - spf
+      - dmarc
+  security:
     enabled: true
   blacklist:
     enabled: true
-    
+
 reports:
   output_dir: "reports"
   retention_days: 30
+
+# Optional: Notification settings in YAML (Secrets can also be in ENV)
+notifications:
+  telegram:
+    bot_token: "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+    chat_id: "-1001234567890"
+
+# Optional: Dead Man's Switch (GET request on completion)
+heartbeat_url: "https://uptime.example.com/api/push/..."
+
+# Optional: JSON Report Upload (POST request with full audit data)
+api_url: "https://dashboard.example.com/api/upload"
 ```
 
 ### Environment Variables
@@ -87,9 +109,16 @@ The following environment variables takes precedence over file configuration:
 | `GITHUB_TOKEN` | GitHub Personal Access Token for issue creation |
 | `GITHUB_REPO` | Target GitHub repository (user/repo) |
 | `GITLAB_TOKEN` | GitLab Private Token |
+| `GITLAB_PROJECT_ID` | GitLab Project ID |
 | `TELEGRAM_BOT_TOKEN` | Telegram Bot API Token |
+| `TELEGRAM_CHAT_ID` | Telegram Chat ID |
 | `TEAMS_WEBHOOK_URL` | Microsoft Teams Connector URL |
 | `GENERIC_WEBHOOK_URL` | Endpoint for JSON alert payloads |
+| `EMAIL_SMTP_SERVER` | SMTP Server Hostname |
+| `EMAIL_SMTP_PORT` | SMTP Port (default: 587) |
+| `EMAIL_USER` | SMTP Username |
+| `EMAIL_PASSWORD` | SMTP Password |
+| `EMAIL_TO` | Recipient Email Address |
 
 ## CI/CD Integration
 
@@ -100,6 +129,27 @@ Include the provided `.gitlab-ci.yml` template in your repository to enable auto
 ### GitHub Actions
 
 The repository includes a workflow in `.github/workflows/deploy.yml` configured to execute scans on a daily schedule (08:00 UTC) and publish reports as build artifacts.
+
+## 🛡️ Privacy & Secrets
+
+If you do not want to expose your domains in a public `config.yaml`:
+
+### Option A: Private Repository (Recommended)
+Simply create this repository as **Private**. Your `config.yaml` and Reports will remain secure and visible only to you. GitHub Pages can also be published privately (requires Enterprise) or you can rely on the Build Artifacts.
+
+### Option B: Inject Config via Secrets (Public Repo)
+You can store your entire `config.yaml` content as a GitHub Secret.
+
+1.  Go to **Settings > Secrets and variables > Actions**.
+2.  Create a New Repository Secret named `DOMAINMATE_CONFIG_CONTENT`.
+3.  Paste the full content of your `config.yaml` there.
+4.  Modify your workflow file (`.github/workflows/pages.yml`) to inject it before running:
+
+```yaml
+      - name: 🤫 Inject Secret Config
+        if: "${{ secrets.DOMAINMATE_CONFIG_CONTENT != '' }}"
+        run: echo "${{ secrets.DOMAINMATE_CONFIG_CONTENT }}" > config.yaml
+```
 
 ## CLI Usage
 
