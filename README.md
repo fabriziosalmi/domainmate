@@ -1,6 +1,6 @@
 # DomainMate
 
-DomainMate is a domain and security monitoring system designed for high resilience and comprehensive asset auditing. It provides ISP-proof monitoring capabilities through robust DNS resolution strategies, deep SSL inspection, and hybrid blacklist monitoring.
+DomainMate is a domain and security monitoring system designed for high resilience and comprehensive asset auditing. It provides monitoring capabilities through robust DNS resolution strategies, deep SSL inspection, and hybrid blacklist monitoring.
 
 ## Overview
 
