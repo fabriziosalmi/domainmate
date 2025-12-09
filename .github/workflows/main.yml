@@ -45,8 +45,10 @@ jobs:
           pip install -r requirements.txt
 
       - name: 🤫 Inject Secret Config (Optional)
-        if: secrets.DOMAINMATE_CONFIG_CONTENT != ''
-        run: echo "${{ secrets.DOMAINMATE_CONFIG_CONTENT }}" > config.yaml
+        run: |
+          if [ -n "${{ secrets.DOMAINMATE_CONFIG_CONTENT }}" ]; then
+            echo "${{ secrets.DOMAINMATE_CONFIG_CONTENT }}" > config.yaml
+          fi
 
       - name: 🔍 Run DomainMate Audit
         env:
