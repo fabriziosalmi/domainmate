@@ -1,0 +1,42 @@
+image: python:3.11-slim
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  paths:
+    - .cache/pip
+    - venv/
+
+stages:
+  - test
+  - scan
+  - deploy
+
+before_script:
+  - python -V
+  - pip install virtualenv
+  - virtualenv venv
+  - source venv/bin/activate
+  - pip install -r requirements.txt
+  - export PYTHONPATH=$PYTHONPATH:$(pwd)
+
+test:
+  stage: test
+  script:
+    - echo "Running basic configuration checks..."
+    - python -c "import yaml; print('YAML Module OK')"
+    - python -c "import src.cli; print('CLI Module Import OK')"
+
+# Daily Usage: Runs the scan and exposes the report as an artifact
+daily_scan:
+  stage: scan
+  only:
+    - schedules
+    - web
+  script:
+    - python src/cli.py
+  artifacts:
+    paths:
+      - reports/index.html
+    expire_in: 1 week

@@ -1,0 +1,31 @@
+domains:
+  - audiolibri.org
+  - radio.freeundergroundtekno.org
+  - wildbox.io
+  - rivoluzioneinformatica.org
+  - webtek.live
+  - navigator.menu
+  - www.certmate.org
+
+monitors:
+  domain:
+    enabled: true
+    expiry_warning_days: 30
+    expiry_critical_days: 7
+  ssl:
+    enabled: true
+    expiry_warning_days: 30
+    expiry_critical_days: 7
+  dns:
+    enabled: true
+    required_records:
+      - spf
+      - dmarc
+  security:
+    enabled: true
+  blacklist:
+    enabled: true
+    
+reports:
+  output_dir: "reports"
+  retention_days: 30
