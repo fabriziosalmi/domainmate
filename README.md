@@ -1,49 +1,65 @@
-# DomainMate: Enterprise Domain & Security Monitoring
+# DomainMate
 
-![Version](https://img.shields.io/badge/version-3.2.0-blue)
-![CI/CD](https://github.com/fabriziosalmi/domainmate/actions/workflows/deploy.yml/badge.svg)
-![Python 3.12](https://img.shields.io/badge/python-3.12-blue?logo=python)
-![Docker](https://img.shields.io/badge/docker-ready-blue?logo=docker)
-![License](https://img.shields.io/badge/license-MIT-green)
+DomainMate is a domain and security monitoring system designed for high resilience and comprehensive asset auditing. It provides ISP-proof monitoring capabilities through robust DNS resolution strategies, deep SSL inspection, and hybrid blacklist monitoring.
 
-**DomainMate** is an ISP-proof, resilient monitoring system designed to protect critical digital assets. It monitors Domain Expiration, SSL Validity, DNS Security (SPF/DMARC), Blacklist Reputation, and Security Headers, delivering actionable reports via modern channels.
+## Overview
 
-## 🚀 Key Features
+The system is engineered to function in restricted network environments, utilizing DNS-over-HTTPS (DoH) failover mechanisms to bypass local resolver issues or firewalls. It performs in-depth analysis of domain health, including:
 
-*   **🛡️ Robust Connectivity**: Uses a pool of public resolvers (Cloudflare, Google, Quad9) with **DoH (DNS-over-HTTPS) fallback** to bypass local ISP blocks/firewalls.
-*   **🌐 Comprehensive Monitoring**:
-    *   **Domain**: WHOIS expiration tracking (Parent domain aware).
-    *   **SSL**: Chain verification, expiry, and weak protocol (SSLv3/TLS1.0) detection.
-    *   **Security**: OWASP header analysis (HSTS, CSP, X-Frame-Options) and info leakage checks.
-    *   **Reputation**: Hybrid Blacklist (RBL) monitoring with "Refused" code filtering.
-*   **🔔 Intelligent Alerting**: Aggregated notifications (Telegram, Teams, GitHub/GitLab Issues) to prevent alert fatigue.
-*   **📊 Enterprise Reporting**: Mobile-responsive HTML reports with Grouped Views, DataTables, and JSON API export.
-*   **🏗️ Universal Deployment**: Runs seamlessly on Docker, Kubernetes, GitHub Actions, GitLab CI, or Bare Metal.
+*   **Domain Validity**: Tracks WHOIS expiration dates with intelligent parent domain awareness.
+*   **SSL/TLS integrity**: Validates certificate chains, expiration dates, and detects deprecated protocols (SSLv3, TLS 1.0/1.1).
+*   **DNS Security**: Audits SPF, DMARC, and DKIM records for email security compliance.
+*   **Reputation Monitoring**: checks IP reputation against major RBLs (Real-time Blackhole Lists) using a hybrid resolution strategy to differentiate between blocking and listing.
+*   **Security Posture**: Analyzes HTTP headers for OWASP recommended configurations (HSTS, CSP, X-Frame-Options) and information leakage.
 
-## 🛠️ Quick Start
+## Architecture
 
-### 1. Installation
+DomainMate is built on Python 3.12 and follows a modular architecture designed for containerized deployment.
 
-**Using Makefile (Recommended)**
+*   **Core Engine**: AsyncIO-based execution for concurrent checks.
+*   **Resilience Layer**: Custom `RobustResolver` implementing a pool of public DNS providers (Cloudflare, Google, Quad9) with automatic DoH fallback.
+*   **Reporting**: Generates static, self-contained HTML reports with DataTables integration for client-side filtering and grouping.
+*   **Notification System**: Centralized dispatcher supporting GitHub Issues, GitLab Issues, Telegram, Microsoft Teams, Email, and generic Webhooks, featuring state management for alert aggregation and frequency control.
+
+## Installation
+
+### Prerequisites
+
+*   Python 3.12 or higher
+*   Docker (optional, for containerized execution)
+
+### Local Setup
+
+A `Makefile` is provided for standardizing operations.
+
 ```bash
+# Initialize virtual environment and install dependencies
 make install
+
+# Run the audit scan
 make run
 ```
 
-**Using Docker**
+### Docker Deployment
+
 ```bash
+# Build the container image
 make docker-build
+
+# Execute the container
 make docker-run
 ```
 
-### 2. Configuration (`config.yaml`)
+## Configuration
 
-Define your assets and monitoring preferences:
+Configuration is managed via `config.yaml`. Sensitive parameters can be overridden via Environment Variables for secure CI/CD integration.
+
+### File Configuration (`config.yaml`)
 
 ```yaml
 domains:
-  - google.com
-  - your-startup.io
+  - example.com
+  - monitor.io
 
 monitors:
   domain:
@@ -53,34 +69,49 @@ monitors:
     enabled: true
   blacklist:
     enabled: true
+    
+reports:
+  output_dir: "reports"
+  retention_days: 30
 ```
 
-### 3. Environment Variables (Secrets)
+### Environment Variables
 
-For CI/CD and production security, override sensitive config using Environment Variables:
+The following environment variables takes precedence over file configuration:
 
 | Variable | Description |
 |----------|-------------|
-| `DOMAINMATE_CONFIG_FILE` | Path to custom config file (e.g. `/secrets/config.yaml`) |
-| `GITHUB_TOKEN` | Token for creating Issues |
+| `DOMAINMATE_CONFIG_FILE` | Path to valid configuration file (default: config.yaml) |
+| `GITHUB_TOKEN` | GitHub Personal Access Token for issue creation |
+| `GITHUB_REPO` | Target GitHub repository (user/repo) |
+| `GITLAB_TOKEN` | GitLab Private Token |
 | `TELEGRAM_BOT_TOKEN` | Telegram Bot API Token |
-| `TEAMS_WEBHOOK_URL` | MS Teams Incoming Webhook URL |
-| `GENERIC_WEBHOOK_URL` | JSON payload POST endpoint |
+| `TEAMS_WEBHOOK_URL` | Microsoft Teams Connector URL |
+| `GENERIC_WEBHOOK_URL` | Endpoint for JSON alert payloads |
 
-## 📦 CI/CD Integration
+## CI/CD Integration
 
-**GitLab CI**
-DomainMate includes a `.gitlab-ci.yml` template. Simply include it to run daily scans.
+### GitLab CI
 
-**GitHub Actions**
-Runs daily at 08:00 UTC via `.github/workflows/deploy.yml`.
+Include the provided `.gitlab-ci.yml` template in your repository to enable automated daily scanning pipelines.
 
-## 🏗️ Architecture
+### GitHub Actions
 
-*   **Core**: Python 3.12+, AsyncIO
-*   **Resilience**: `RobustResolver` (DNS pool), `urllib3` (SSL)
-*   **Reporting**: Jinja2 (HTML), DataTables.js (UI)
-*   **Linting/Quality**: Ruff, MyPy
+The repository includes a workflow in `.github/workflows/deploy.yml` configured to execute scans on a daily schedule (08:00 UTC) and publish reports as build artifacts.
 
----
-*Maintained by Fabrizio Salmi*
+## CLI Usage
+
+The system can be invoked directly via the Command Line Interface:
+
+```bash
+python src/cli.py --config /path/to/config.yaml --notify
+```
+
+**Options:**
+*   `--config`: Path to the configuration file (overridden by `DOMAINMATE_CONFIG_FILE`).
+*   `--notify`: Enable dispatching of notifications to configured channels.
+*   `--demo`: Generate a report using mock data for demonstration purposes.
+
+## License
+
+This software is released under the MIT License.
