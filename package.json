@@ -1,0 +1,17 @@
+{
+  "name": "domainmate",
+  "version": "1.0.0",
+  "description": "DomainMate is a domain and security monitoring system designed for high resilience and comprehensive asset auditing. It provides monitoring capabilities through robust DNS resolution strategies, deep SSL inspection, and hybrid blacklist monitoring.",
+  "main": "index.js",
+  "scripts": {
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "vitepress": "^1.6.4"
+  }
+}
