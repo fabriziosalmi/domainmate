@@ -150,7 +150,7 @@ monitors:
     enabled: true
 ```
 
-3. **Use online validator:** [yamllint.com](http://www.yamllint.com/)
+3. **Use online validator:** [yamllint.com](https://www.yamllint.com/)
 
 ### "No domains found in config"
 

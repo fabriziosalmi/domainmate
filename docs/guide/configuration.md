@@ -205,7 +205,7 @@ Override or supplement file configuration with environment variables:
 
 | Variable | Description |
 |----------|-------------|
-| `DOMAINMATE_CONFIG_FILE` | Path to configuration file (default: config.yaml) |
+| `DOMAINMATE_CONFIG_FILE` | Path to configuration file (default: config.yaml). Can be absolute (`/etc/domainmate/config.yaml`) or relative (`./config.yaml`). |
 | `GITHUB_TOKEN` | GitHub Personal Access Token for issue creation |
 | `GITHUB_REPO` | Target GitHub repository (format: `user/repo`) |
 | `GITLAB_TOKEN` | GitLab Private Token |
