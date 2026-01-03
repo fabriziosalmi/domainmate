@@ -4,6 +4,18 @@ DomainMate is a domain and security monitoring system designed for high resilien
 
 ![screenshot](screenshot.png)
 
+## 📚 Documentation
+
+**[📖 Read the Full Documentation](https://fabriziosalmi.github.io/domainmate/)**
+
+The comprehensive documentation includes:
+- 🚀 [Getting Started Guide](https://fabriziosalmi.github.io/domainmate/getting-started)
+- ⚙️ [Configuration Reference](https://fabriziosalmi.github.io/domainmate/guide/configuration)
+- 🔍 [Monitor Types](https://fabriziosalmi.github.io/domainmate/guide/monitors)
+- 🔔 [Notification Setup](https://fabriziosalmi.github.io/domainmate/guide/notifications)
+- 🏗️ [Architecture Overview](https://fabriziosalmi.github.io/domainmate/reference/architecture)
+- 🛠️ [Troubleshooting](https://fabriziosalmi.github.io/domainmate/reference/troubleshooting)
+
 ## Overview
 
 The system is engineered to function in restricted network environments, utilizing DNS-over-HTTPS (DoH) failover mechanisms to bypass local resolver issues or firewalls. It performs in-depth analysis of domain health, including:

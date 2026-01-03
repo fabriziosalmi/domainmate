@@ -129,3 +129,11 @@ reports/*.html
 reports/*.json
 reports/notification_state.json
 reports/index.html
+
+# Node.js / VitePress
+node_modules/
+package-lock.json
+docs/.vitepress/dist
+docs/.vitepress/cache
+.temp/
+*.local
