@@ -266,9 +266,9 @@ async def main():
 
     # Notifications (Aggregated via Manager)
     if args.notify:
-             warning_issues = [r for r in all_results if r.get("status") in ["warning", "critical"]]
-             msg = f"Found {len(warning_issues)} warnings.\nCheck report for details."
-             await notifier.send_notification("DomainMate Warning", msg, "warning")
+        warning_issues = [r for r in all_results if r.get("status") in ["warning", "critical"]]
+        msg = f"Found {len(warning_issues)} warnings.\nCheck report for details."
+        await notifier.send_notification("DomainMate Warning", msg, "warning")
 
 if __name__ == "__main__":
     asyncio.run(main())
