@@ -156,7 +156,7 @@ You can store your entire `config.yaml` content as a GitHub Secret.
 4.  Modify your workflow file (`.github/workflows/pages.yml`) to inject it before running:
 
 ```yaml
-      - name: 🤫 Inject Secret Config
+      - name: Inject Secret Config
         if: "${{ secrets.DOMAINMATE_CONFIG_CONTENT != '' }}"
         run: echo "${{ secrets.DOMAINMATE_CONFIG_CONTENT }}" > config.yaml
 ```
