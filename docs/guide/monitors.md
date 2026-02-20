@@ -16,7 +16,7 @@ DomainMate includes five specialized monitors, each designed to check a specific
 
 ### Purpose
 
-Tracks domain registration expiration dates to prevent accidental domain loss.
+Tracks domain registration expiration dates.
 
 ### Configuration
 
@@ -30,14 +30,13 @@ monitors:
 
 ### How It Works
 
-1. Performs WHOIS lookup on the domain
-2. Extracts expiration date from registrar
+1. Performs WHOIS lookup on the domain (or its parent domain for subdomains)
+2. Extracts expiration date from registrar response
 3. Calculates days until expiry
-4. Triggers alerts based on thresholds
+4. Sets status based on thresholds
 
-### Smart Features
+### Parent Domain Detection
 
-**Parent Domain Detection:**
 ```yaml
 domains:
   - www.example.com        # Checks example.com for WHOIS
@@ -50,13 +49,13 @@ DomainMate automatically queries the parent domain for WHOIS to avoid errors lik
 **Multiple Date Format Support:**
 - Handles registrars returning single dates or lists
 - Timezone-aware calculations
-- Graceful fallback for missing data
+- Returns error status if expiration date cannot be retrieved
 
 ### Status Levels
 
-- **OK** (Green): More than 30 days until expiry
-- **WARNING** (Orange): 8-30 days until expiry
-- **CRITICAL** (Red): Less than 7 days until expiry
+- **OK**: More than `expiry_warning_days` (default 30) days until expiry
+- **WARNING**: Less than 30 days until expiry
+- **CRITICAL**: Less than 7 days until expiry
 
 ### Output Example
 
@@ -75,7 +74,7 @@ DomainMate automatically queries the parent domain for WHOIS to avoid errors lik
 
 ### Purpose
 
-Validates SSL/TLS certificates to ensure secure connections and prevent certificate expiry.
+Checks SSL/TLS certificate expiration and detects deprecated protocol versions.
 
 ### Configuration
 
@@ -89,39 +88,26 @@ monitors:
 
 ### Checks Performed
 
-1. **Certificate Validity**
-   - Not expired
-   - Not yet valid
-   - Within valid date range
+1. **Certificate Expiration**
+   - Connects to port 443 and retrieves the certificate
+   - Calculates days until `notAfter` date
 
-2. **Certificate Chain**
-   - Complete chain present
-   - No broken links
-   - Trusted root CA
-
-3. **Protocol Security**
-   - SSLv3 detection (deprecated)
-   - TLS 1.0/1.1 detection (deprecated)
-   - TLS 1.2+ recommended
-
-4. **Certificate Details**
-   - Issuer information
-   - Subject Alternative Names (SANs)
-   - Key algorithm and size
+2. **Protocol Version Detection**
+   - Attempts TLS 1.0 and TLS 1.1 connections if the local OpenSSL build supports them
+   - Python's ssl module often disables these at compile time; detection depends on the system OpenSSL version
 
 ### Connection Strategy
 
-DomainMate intelligently finds the right hostname:
+The CLI resolves the best connectable hostname before calling the SSL monitor:
 
 1. Try exact domain: `example.com`
 2. Fallback to www: `www.example.com`
-3. Use RobustResolver with DoH failover
 
 ### Status Levels
 
-- **OK**: Certificate valid, no deprecated protocols
-- **WARNING**: 8-30 days until expiry, or minor issues
-- **CRITICAL**: <7 days until expiry, or major issues
+- **OK**: Certificate valid with more than `expiry_warning_days` remaining
+- **WARNING**: Less than 30 days until expiry
+- **CRITICAL**: Less than 7 days until expiry, or deprecated protocols detected
 
 ### Output Example
 
@@ -132,12 +118,7 @@ DomainMate intelligently finds the right hostname:
   "expiration_date": "2025-06-15",
   "days_until_expiry": 143,
   "issuer": "Let's Encrypt",
-  "message": "Certificate valid, expires in 143 days",
-  "details": {
-    "subject": "example.com",
-    "sans": ["example.com", "www.example.com"],
-    "protocol": "TLSv1.3"
-  }
+  "version": 3
 }
 ```
 
@@ -145,7 +126,7 @@ DomainMate intelligently finds the right hostname:
 
 ### Purpose
 
-Audits DNS security records for email authentication and anti-spoofing protection.
+Checks for SPF and DMARC DNS records.
 
 ### Configuration
 
@@ -154,9 +135,8 @@ monitors:
   dns:
     enabled: true
     required_records:
-      - spf      # Required
-      - dmarc    # Required
-      - dkim     # Optional
+      - spf      # Sender Policy Framework
+      - dmarc    # Domain-based Message Authentication
 ```
 
 ### Records Checked
@@ -171,9 +151,7 @@ v=spf1 include:_spf.google.com ~all
 ```
 
 **DomainMate checks:**
-- SPF record exists
-- Valid SPF syntax
-- Mechanism usage (include, a, mx, ip4, etc.)
+- SPF record exists (TXT record starting with `v=spf1`)
 
 #### DMARC (Domain-based Message Authentication)
 
@@ -185,15 +163,11 @@ v=DMARC1; p=reject; rua=mailto:dmarc@example.com
 ```
 
 **DomainMate checks:**
-- DMARC record exists at `_dmarc.{domain}`
-- Policy level (none, quarantine, reject)
-- Reporting configured
+- DMARC record exists at `_dmarc.{domain}` (TXT record starting with `v=DMARC1`)
 
 #### DKIM (DomainKeys Identified Mail)
 
-**What it does:** Adds cryptographic signature to outgoing emails.
-
-**Note:** DKIM uses selector-based records (e.g., `selector._domainkey.example.com`), so detection is optional.
+DKIM uses selector-based records (e.g., `selector._domainkey.example.com`). Since selectors are not standardized and domain-specific, DomainMate does not automatically check DKIM.
 
 ### Parent Domain Strategy
 
@@ -208,9 +182,8 @@ domains:
 
 ### Status Levels
 
-- **OK**: All required records present and valid
-- **WARNING**: Some records missing or misconfigured
-- **CRITICAL**: No security records found
+- **OK**: Both SPF and DMARC records present
+- **WARNING**: One or both records missing
 
 ### Output Example
 
@@ -218,11 +191,8 @@ domains:
 {
   "monitor": "dns",
   "status": "ok",
-  "message": "SPF and DMARC present",
-  "details": {
-    "spf": "v=spf1 include:_spf.google.com ~all",
-    "dmarc": "v=DMARC1; p=reject; rua=mailto:dmarc@example.com"
-  }
+  "spf": {"status": "present", "record": "v=spf1 include:_spf.google.com ~all"},
+  "dmarc": {"status": "present", "record": "v=DMARC1; p=reject; rua=mailto:dmarc@example.com"}
 }
 ```
 
@@ -230,7 +200,7 @@ domains:
 
 ### Purpose
 
-Analyzes HTTP security headers to ensure best practices and detect information leakage.
+Checks HTTP security headers and detects server information disclosure.
 
 ### Configuration
 
@@ -244,7 +214,7 @@ monitors:
 
 #### HSTS (HTTP Strict Transport Security)
 
-**Protects against:** Man-in-the-middle attacks, protocol downgrade
+**Protects against:** Protocol downgrade attacks
 
 **Recommended:**
 ```
@@ -253,7 +223,7 @@ Strict-Transport-Security: max-age=31536000; includeSubDomains
 
 #### CSP (Content Security Policy)
 
-**Protects against:** XSS, data injection, clickjacking
+**Protects against:** XSS, data injection
 
 **Example:**
 ```
@@ -282,25 +252,15 @@ X-Frame-Options: SAMEORIGIN
 X-Content-Type-Options: nosniff
 ```
 
-#### Other Headers
+#### Information Disclosure
 
-- **X-XSS-Protection**: Legacy XSS protection (deprecated but still useful)
-- **Referrer-Policy**: Controls referrer information
-- **Server**: Information disclosure (should be removed/obscured)
-- **X-Powered-By**: Information disclosure (should be removed)
-
-### Security Issues Detected
-
-1. **Missing Headers**: Critical security headers not present
-2. **Weak Configurations**: Present but not optimal
-3. **Information Leakage**: Server/X-Powered-By revealing stack info
-4. **Deprecated Protocols**: Using insecure SSL/TLS versions
+DomainMate checks for `Server` and `X-Powered-By` headers that reveal software versions.
 
 ### Status Levels
 
-- **OK**: All OWASP-recommended headers present
-- **WARNING**: Some headers missing or weak
-- **CRITICAL**: Multiple critical headers missing
+- **OK**: No issues found (all checked headers present, no info leakage, no weak protocols)
+- **WARNING**: Missing security headers or information disclosure detected
+- **CRITICAL**: Deprecated TLS protocols detected (TLS 1.0/1.1)
 
 ### Output Example
 
@@ -309,16 +269,10 @@ X-Content-Type-Options: nosniff
   "monitor": "security",
   "status": "warning",
   "message": "2 Security Issues",
-  "details": {
-    "missing_headers": ["X-Frame-Options", "X-Content-Type-Options"],
-    "present_headers": {
-      "Strict-Transport-Security": "max-age=31536000"
-    },
-    "info_disclosure": {
-      "Server": "nginx/1.18.0",
-      "X-Powered-By": "PHP/7.4"
-    }
-  }
+  "details": [
+    "Missing HSTS (OWASP A05)",
+    "Server Version Disclosed: nginx/1.18.0"
+  ]
 }
 ```
 
@@ -326,7 +280,7 @@ X-Content-Type-Options: nosniff
 
 ### Purpose
 
-Monitors your domain's IP addresses against Real-time Blackhole Lists (RBLs) to detect reputation issues.
+Checks the domain's resolved IP address against Real-time Blackhole Lists (RBLs).
 
 ### Configuration
 
@@ -338,38 +292,31 @@ monitors:
 
 ### RBLs Checked
 
-DomainMate queries multiple major RBL providers:
+DomainMate queries these RBL providers using standard DNS queries:
 
 - **Spamhaus ZEN** (`zen.spamhaus.org`)
 - **SORBS** (`dnsbl.sorbs.net`)
 - **SpamCop** (`bl.spamcop.net`)
 - **Barracuda** (`b.barracudacentral.org`)
 - **UCEPROTECT** (`dnsbl-1.uceprotect.net`)
-
-### Hybrid Resolution Strategy
-
-**Problem:** Some RBLs block queries from data centers, returning false positives.
-
-**Solution:** DomainMate uses a hybrid approach:
-
-1. Try query via standard DNS
-2. If blocked, use DoH (DNS-over-HTTPS)
-3. Differentiate between "blocked" and "listed"
+- **CBL** (`cbl.abuseat.org`)
 
 ### How It Works
 
-1. Resolves domain to IP address(es)
-2. For each IP, queries RBLs using reverse DNS lookup
+1. Resolves domain to IP address using RobustResolver
+2. For each IP, constructs a reverse DNS query: `{reversed_ip}.{rbl_domain}`
 3. Interprets response codes:
    - `NXDOMAIN`: Not listed (clean)
-   - `127.0.0.x`: Listed (check specific code)
-   - Timeout/Error: RBL query blocked or unavailable
+   - `127.0.0.x`: Listed
+   - `127.255.255.x`: Query blocked (RBL blocking the querying server)
+   - `127.0.0.10` or `127.0.0.11`: Policy-based listing (PBL/dynamic IP range) — skipped
+
+**Note:** RBL queries use the system DNS resolver, not DoH. Some RBLs block queries from cloud/data center IPs, which may appear as "blocked" responses rather than actual listings.
 
 ### Status Levels
 
-- **OK**: Not listed in any RBLs
-- **WARNING**: Listed in 1-2 RBLs (investigate)
-- **CRITICAL**: Listed in 3+ RBLs (serious issue)
+- **OK**: Not listed in any RBL
+- **CRITICAL**: Listed in one or more RBLs
 
 ### Output Example
 
@@ -377,15 +324,10 @@ DomainMate queries multiple major RBL providers:
 {
   "monitor": "blacklist",
   "status": "critical",
-  "message": "Listed in 2 RBLs",
-  "listed_in": [
-    "zen.spamhaus.org",
-    "dnsbl.sorbs.net"
-  ],
-  "details": {
-    "ip": "203.0.113.45",
-    "clean_rbls": ["bl.spamcop.net", "b.barracudacentral.org"]
-  }
+  "ip": "203.0.113.45",
+  "listed_in": ["zen.spamhaus.org"],
+  "checked_rbls": 6,
+  "message": "Listed in 1 blacklists"
 }
 ```
 
@@ -393,28 +335,18 @@ DomainMate queries multiple major RBL providers:
 
 ### DNS Resolution Strategy
 
-All monitors use the **RobustResolver** for network requests, providing:
+The `RobustResolver` is used for hostname resolution (not for RBL queries). It:
 
-1. **Primary Resolvers:**
-   - Cloudflare (1.1.1.1)
-   - Google (8.8.8.8)
-   - Quad9 (9.9.9.9)
+1. Shuffles and queries a pool of public DNS servers:
+   - Cloudflare (1.1.1.1, 1.0.0.1)
+   - Google (8.8.8.8, 8.8.4.4)
+   - Quad9 (9.9.9.9, 149.112.112.112)
+   - OpenDNS (208.67.222.222)
+   - Verisign (64.6.64.6)
 
-2. **DoH Fallback:**
-   - `https://cloudflare-dns.com/dns-query`
-   - `https://dns.google/dns-query`
+2. Falls back to DNS-over-HTTPS (Cloudflare) if all standard DNS queries fail
 
-3. **Automatic Failover:**
-   - Tries each resolver in sequence
-   - Falls back to DoH if all fail
-   - Bypasses firewalls and local DNS issues
-
-### Why This Matters
-
-- **Restricted Networks**: Works in corporate firewalls
-- **Censored Regions**: Bypasses DNS filtering
-- **Reliability**: Multiple fallbacks ensure checks complete
-- **Privacy**: DoH encrypts DNS queries
+This helps in environments where local DNS resolution is unreliable or blocked.
 
 ## Monitor Interaction
 
@@ -466,14 +398,6 @@ monitors:
   blacklist:
     enabled: true
 ```
-
-### For High-Security Applications
-
-Enable everything with strict thresholds, plus:
-- Monitor subdomains separately
-- Check multiple times daily via CI/CD
-- Integrate with SOC/SIEM systems
-- Enable all notification channels
 
 ## Troubleshooting
 

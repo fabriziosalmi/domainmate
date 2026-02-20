@@ -377,16 +377,7 @@ Content-Security-Policy: default-src 'self'
 
 **This is normal from data center IPs.** RBLs block queries from servers to prevent abuse.
 
-**Solution:** DomainMate's RobustResolver automatically uses DoH fallback.
-
-**Verify:**
-```bash
-# This might be blocked
-dig 4.3.2.1.zen.spamhaus.org
-
-# But DoH works
-curl 'https://cloudflare-dns.com/dns-query?name=4.3.2.1.zen.spamhaus.org&type=A'
-```
+**Note:** RBL queries use the system DNS resolver. DomainMate filters out `127.255.255.x` responses (blocked queries) so they do not count as listings.
 
 #### "Domain listed in RBL"
 

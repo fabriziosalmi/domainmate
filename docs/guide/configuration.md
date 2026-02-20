@@ -312,11 +312,8 @@ python src/cli.py --notify
 
 DomainMate validates your configuration on startup:
 
-- ✅ Valid YAML syntax
-- ✅ Required fields present
-- ✅ Domain format correctness
-- ✅ Numeric values in valid ranges
-- ❌ Invalid settings cause early exit with error
+- Valid YAML syntax (malformed YAML causes an early exit with an error)
+- `domains` list must be present and non-empty
 
 ## Examples
 

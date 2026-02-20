@@ -83,24 +83,20 @@ class Monitor:
 **File:** `src/monitors/ssl_monitor.py`
 
 **Dependencies:**
-- `ssl`: Python SSL module
-- `socket`: Network connections
-- `cryptography`: Certificate parsing
-- `OpenSSL`: Advanced SSL features
+- `ssl`: Python SSL module (standard library)
+- `socket`: Network connections (standard library)
 
 **Process:**
-1. Establishes SSL/TLS connection
-2. Retrieves certificate chain
-3. Validates certificate
-4. Checks expiration
-5. Detects deprecated protocols
-6. Returns results
+1. Opens a TLS connection to the domain on port 443
+2. Retrieves the certificate via `getpeercert()`
+3. Parses the `notAfter` field to calculate days until expiry
+4. Applies status thresholds
+5. Optionally checks for TLS 1.0/1.1 support (where local OpenSSL allows it)
 
-**Features:**
-- Full chain validation
-- Protocol version detection
-- Certificate issuer extraction
-- SAN (Subject Alternative Names) parsing
+**Limitations:**
+- Does not perform full chain validation beyond what Python's ssl module does by default
+- Does not parse SANs or key algorithm/size from the certificate
+- Deprecated protocol detection depends on local OpenSSL build
 
 #### DNS Monitor
 
@@ -108,20 +104,16 @@ class Monitor:
 
 **Dependencies:**
 - `dnspython`: DNS query library
-- RobustResolver: Custom DNS resolver
 
 **Process:**
-1. Queries TXT records for domain
-2. Parses SPF record (v=spf1...)
-3. Queries _dmarc subdomain for DMARC
-4. Optionally checks DKIM selectors
-5. Validates syntax
-6. Returns compliance status
+1. Queries TXT records for domain to find SPF record (`v=spf1` prefix)
+2. Queries `_dmarc.{domain}` TXT record for DMARC (`v=DMARC1` prefix)
+3. Returns presence/absence of each record
 
 **Records Checked:**
 - **SPF**: Direct TXT query on domain
 - **DMARC**: TXT query on `_dmarc.{domain}`
-- **DKIM**: TXT query on `{selector}._domainkey.{domain}`
+- **DKIM**: Not automatically checked (selector-based, not standardized)
 
 #### Security Monitor
 
@@ -129,48 +121,48 @@ class Monitor:
 
 **Dependencies:**
 - `requests`: HTTP client
-- `aiohttp`: Async HTTP (future)
 
 **Process:**
-1. Makes HTTP/HTTPS request to domain
-2. Extracts response headers
-3. Checks for required security headers
-4. Validates header values
-5. Detects information disclosure
-6. Returns security posture
+1. Makes an HTTPS HEAD request to the domain
+2. Checks for HSTS, CSP, X-Frame-Options, X-Content-Type-Options headers
+3. Checks for `Server` and `X-Powered-By` information disclosure
+4. Attempts TLS 1.0/1.1 connections if local OpenSSL supports it
 
 **Headers Analyzed:**
 - Strict-Transport-Security (HSTS)
 - Content-Security-Policy (CSP)
 - X-Frame-Options
 - X-Content-Type-Options
-- X-XSS-Protection
-- Referrer-Policy
 - Server (info disclosure)
 - X-Powered-By (info disclosure)
+- X-AspNet-Version (info disclosure)
 
 #### Blacklist Monitor
 
 **File:** `src/monitors/blacklist_monitor.py`
 
 **Dependencies:**
-- `dnspython`: RBL queries
-- RobustResolver: DNS with DoH fallback
+- `dnspython`: RBL queries (using system resolver, not RobustResolver)
+- RobustResolver: Used only for initial IP resolution
 
 **Process:**
-1. Resolves domain to IP address
+1. Resolves domain to IP address using RobustResolver
 2. Reverses IP (e.g., 1.2.3.4 → 4.3.2.1)
-3. Queries each RBL: `{reversed_ip}.{rbl_domain}`
+3. Queries each RBL via system DNS resolver: `{reversed_ip}.{rbl_domain}`
 4. Interprets response:
    - NXDOMAIN = not listed
-   - 127.0.0.x = listed
-   - Timeout = blocked query
+   - `127.0.0.x` = listed
+   - `127.255.255.x` = query blocked by RBL
+   - `127.0.0.10/11` = PBL/policy listing (skipped)
 5. Returns aggregated results
+
+**Note:** RBL queries use the system DNS resolver. Some RBLs block queries from cloud/data center IP ranges.
 
 **RBLs Queried:**
 - zen.spamhaus.org
-- dnsbl.sorbs.net
 - bl.spamcop.net
+- cbl.abuseat.org
+- dnsbl.sorbs.net
 - b.barracudacentral.org
 - dnsbl-1.uceprotect.net
 
@@ -178,47 +170,13 @@ class Monitor:
 
 **File:** `src/utils/dns_helpers.py`
 
-The heart of DomainMate's resilience strategy.
-
-**Architecture:**
-
-```python
-class RobustResolver:
-    def __init__(self):
-        self.resolvers = [
-            ("1.1.1.1", 53),      # Cloudflare
-            ("8.8.8.8", 53),      # Google
-            ("9.9.9.9", 53)       # Quad9
-        ]
-        self.doh_endpoints = [
-            "https://cloudflare-dns.com/dns-query",
-            "https://dns.google/dns-query"
-        ]
-```
-
 **Resolution Strategy:**
 
-1. **Primary Phase:**
-   - Try each standard DNS resolver sequentially
-   - Timeout: 2 seconds per resolver
-   - Move to next on failure
+1. Shuffles and queries a pool of public DNS servers (Cloudflare, Google, Quad9, OpenDNS, Verisign) with a 2-second timeout
+2. If all fail with a timeout/connectivity error, falls back to Cloudflare DNS-over-HTTPS (`https://cloudflare-dns.com/dns-query`)
+3. Returns first successful IP; raises an exception if all methods fail
 
-2. **Fallback Phase:**
-   - If all primary resolvers fail
-   - Switch to DoH endpoints
-   - Uses HTTPS for DNS queries
-   - Bypasses firewall/censorship
-
-3. **Result:**
-   - Returns first successful resolution
-   - Raises exception if all methods fail
-
-**Why This Works:**
-
-- **Firewall Bypass**: DoH uses HTTPS (port 443), typically allowed
-- **Censorship Resistance**: Encrypted DNS queries
-- **Reliability**: Multiple fallbacks
-- **Privacy**: No local DNS logging
+Used for hostname resolution in `get_connectable_hostname()` and by `BlacklistMonitor` for IP resolution. RBL queries in `BlacklistMonitor` use the system DNS resolver, not RobustResolver.
 
 ### 3. Reporting System
 
@@ -226,197 +184,57 @@ class RobustResolver:
 
 **Dependencies:**
 - `jinja2`: Template engine
-- `pandas`: Data manipulation (optional)
 
 **Process:**
 
-1. **Data Aggregation:**
-   ```python
-   def generate(self, results: List[dict]) -> str:
-       # Group by domain
-       # Calculate statistics
-       # Categorize issues
-   ```
+1. **Data Aggregation:** Groups results by domain, calculates summary statistics
+2. **Template Rendering:** Loads HTML template from `src/templates/report.html` and injects data
+3. **Output:** Self-contained HTML file with embedded CSS and JavaScript
 
-2. **Template Rendering:**
-   - Loads HTML template from `src/templates/report.html`
-   - Injects data into template
-   - Embeds CSS and JavaScript
-
-3. **Output:**
-   - Self-contained HTML file
-   - No external dependencies
-   - Works offline
-   - Mobile responsive
-
-**Report Structure:**
-
-```html
-<!DOCTYPE html>
-<html>
-<head>
-    <style>/* Embedded CSS */</style>
-</head>
-<body>
-    <header>
-        <h1>DomainMate Report</h1>
-        <div class="summary">
-            <!-- Compliance, Warnings, Critical -->
-        </div>
-    </header>
-    
-    <section class="categories">
-        <!-- Issues by Category -->
-    </section>
-    
-    <section class="detailed-ledger">
-        <table id="results-table">
-            <!-- DataTables Integration -->
-        </table>
-    </section>
-    
-    <script>/* DataTables, jQuery */</script>
-</body>
-</html>
-```
-
-**Features:**
-- DataTables for interactive filtering
-- Sort by any column
-- Search across all fields
-- Group by domain/monitor
-- Export to CSV/PDF
-- Print-friendly
+**Report Features:**
+- DataTables for interactive filtering and sorting
+- Self-contained (no external dependencies at runtime)
+- Mobile responsive
 
 ### 4. Notification System
 
-**File:** `src/notifications/manager.py`
+**File:** `src/notifications/service.py`
 
-**Architecture:**
+The `NotificationService` class reads configuration from environment variables (via pydantic-settings) and the YAML config, then dispatches to all configured channels.
 
-```python
-class NotificationService:
-    def __init__(self):
-        self.channels = []
-        self._load_channels()
-    
-    async def send_notification(self, title, message, level):
-        tasks = []
-        for channel in self.channels:
-            if channel.is_enabled():
-                task = channel.send(title, message, level)
-                tasks.append(task)
-        
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        return results
-```
+**Channel Implementations (all in `service.py`):**
 
-**Channels:**
+1. **GitHub Issues** — creates issues via PyGithub (critical level only)
+2. **GitLab Issues** — creates issues via python-gitlab (critical level only)
+3. **Telegram** — sends messages via direct HTTP to Telegram Bot API using aiohttp
+4. **Microsoft Teams** — sends MessageCard payloads via webhook URL using aiohttp
+5. **Email** — sends plain text emails via smtplib with STARTTLS
+6. **Generic Webhook** — POSTs a JSON payload to a configured URL
 
-Each channel implements:
+**NotificationManager** (`src/notifications/manager.py`) adds per-issue deduplication with a 24-hour cooldown and aggregated digest messages. It is not called by the CLI's `--notify` flag directly.
 
-```python
-class NotificationChannel:
-    def is_enabled(self) -> bool:
-        """Check if channel is configured"""
-        pass
-    
-    async def send(self, title, message, level):
-        """Send notification"""
-        pass
-```
-
-**Channel Implementations:**
-
-1. **GitHub Issues** (`src/notifications/github.py`)
-   - Uses PyGithub library
-   - Creates issues with labels
-   - State management for deduplication
-
-2. **GitLab Issues** (`src/notifications/gitlab.py`)
-   - Uses python-gitlab library
-   - Similar to GitHub
-
-3. **Telegram** (`src/notifications/telegram.py`)
-   - Uses python-telegram-bot
-   - Markdown formatting
-   - Group/private chat support
-
-4. **Microsoft Teams** (`src/notifications/teams.py`)
-   - Webhook-based
-   - Adaptive cards
-   - Color-coded severity
-
-5. **Email** (`src/notifications/email.py`)
-   - SMTP with TLS
-   - HTML/plain text
-   - Multiple recipients
-
-6. **Generic Webhook** (`src/notifications/webhook.py`)
-   - POST JSON payload
-   - Configurable endpoint
-   - Custom headers/auth
-
-**State Management:**
-
-```python
-class NotificationState:
-    """Prevents duplicate notifications"""
-    
-    def __init__(self):
-        self.sent_alerts = {}  # key: (domain, issue_type), value: timestamp
-    
-    def should_send(self, domain, issue_type):
-        key = (domain, issue_type)
-        if key in self.sent_alerts:
-            last_sent = self.sent_alerts[key]
-            if time.time() - last_sent < COOLDOWN_PERIOD:
-                return False
-        return True
-    
-    def mark_sent(self, domain, issue_type):
-        self.sent_alerts[(domain, issue_type)] = time.time()
-```
+**CLI behavior:** When `--notify` is passed, the CLI sends one aggregated notification listing the total number of issues to all configured channels.
 
 ### 5. CLI Interface
 
 **File:** `src/cli.py`
 
-**Entry Point:**
+**Entry Point:** `async def main()`
 
-```python
-async def main():
-    # Parse arguments
-    args = parse_args()
-    
-    # Load configuration
-    config = load_config(args.config)
-    
-    # Initialize monitors
-    monitors = initialize_monitors(config)
-    
-    # Run checks
-    results = []
-    for domain in config['domains']:
-        for monitor in monitors:
-            result = monitor.check(domain)
-            results.append(result)
-    
-    # Generate report
-    reporter = HTMLGenerator()
-    report_path = reporter.generate(results)
-    
-    # Send notifications
-    if args.notify:
-        notifier = NotificationService()
-        await notifier.send_aggregated(results)
-    
-    # Integrations (heartbeat, API upload)
-    await send_heartbeat(config)
-    await upload_to_api(config, results)
-```
+**Arguments:**
+- `--config`: Path to YAML config file (default: `config.yaml`)
+- `--notify`: Send notifications after the audit
+- `--demo`: Generate a report with mock data
 
-**Smart Domain Handling:**
+**Execution flow:**
+1. Load and parse `config.yaml`
+2. For each domain: run enabled monitors sequentially
+3. Generate HTML report
+4. Optionally send heartbeat GET request
+5. Optionally upload results as JSON to `api_url`
+6. If `--notify`: send a single aggregated notification via `NotificationService`
+
+**Domain handling helpers:**
 
 ```python
 def clean_domain(raw_domain: str) -> str:
@@ -467,179 +285,78 @@ def get_connectable_hostname(domain: str) -> str:
 
 **File:** `api/api.py`
 
-**FastAPI Application:**
+A FastAPI application exposing the monitors via HTTP. Useful for on-demand checks.
 
-```python
-app = FastAPI(
-    title="DomainMate API",
-    version="1.0.0",
-    description="Domain and Security Monitoring API"
-)
+**Endpoints:**
+- `POST /analyze` — run monitors for a domain, send notifications via background task if issues found
+- `POST /notify/test` — test notification channels
+- `GET /metrics` — basic health/status
 
-# Initialize monitors
-domain_monitor = DomainMonitor()
-ssl_monitor = SSLMonitor()
-dns_monitor = DNSMonitor()
-security_monitor = SecurityMonitor()
-blacklist_monitor = BlacklistMonitor()
+**Starting the API server:**
 
-@app.post("/analyze")
-async def analyze_domain(req: AnalyzeRequest):
-    results = {}
-    
-    if req.check_domain:
-        results['domain'] = domain_monitor.check_domain(req.domain)
-    
-    if req.check_ssl:
-        results['ssl'] = ssl_monitor.check_ssl(req.domain)
-    
-    # ... other monitors
-    
-    return results
+```bash
+cd /path/to/domainmate
+uvicorn api.api:app --host 0.0.0.0 --port 8000
 ```
 
-**Benefits:**
-- RESTful interface
-- Async request handling
-- Auto-generated documentation
-- Type validation with Pydantic
-- Easy integration with external systems
+The API server is not required for normal CLI usage.
 
 ## Design Decisions
 
 ### Why Python 3.12?
 
-- **Modern Features**: Match/case, type hints, performance improvements
-- **Async/Await**: Native async support for concurrent operations
-- **Rich Ecosystem**: Excellent libraries for DNS, SSL, HTTP
-- **Maintainability**: Clean, readable code
+- Active support, performance improvements, and a rich ecosystem for DNS, SSL, and HTTP libraries
 
-### Why AsyncIO?
+### Why Sequential Checks?
 
-Currently, DomainMate runs checks sequentially, but the architecture supports async:
-
-```python
-# Future enhancement
-async def check_all_domains(domains):
-    tasks = []
-    for domain in domains:
-        task = asyncio.create_task(check_domain(domain))
-        tasks.append(task)
-    
-    results = await asyncio.gather(*tasks)
-    return results
-```
-
-**Benefits:**
-- Check multiple domains simultaneously
-- Reduced total execution time
-- Better resource utilization
+Checks currently run sequentially per domain. The CLI is `async` to support the aiohttp-based heartbeat and API upload, but monitor checks are synchronous. A future enhancement could parallelize checks across domains.
 
 ### Why Static HTML Reports?
 
 **Advantages:**
-- No server required
+- No server required to view
 - Works offline
-- Easy to archive
-- Shareable
-- No database dependencies
+- Easy to archive and share
 - GitHub Pages compatible
 
 **Trade-offs:**
-- No real-time updates (refresh required)
-- Limited to static data
-- Can't update historical data
+- No real-time updates
+- No historical tracking across runs
 
 ### Why DoH Fallback?
 
-**Problem:** Traditional DNS can be:
-- Blocked by firewalls
-- Censored by governments
-- Logged by ISPs
-- Manipulated by attackers
-
-**Solution:** DNS-over-HTTPS:
-- Encrypted queries
-- Uses port 443 (HTTPS)
-- Bypasses most firewalls
-- Privacy-preserving
-
-### Why Multiple Notification Channels?
-
-**Redundancy:** If one channel fails, others still work
-
-**Flexibility:** Different teams prefer different tools
-
-**Reach:** Some users prefer GitHub, others Telegram
-
-**Compliance:** Some organizations require email trails
+The `RobustResolver` falls back to DNS-over-HTTPS (Cloudflare) when all standard DNS resolvers fail. This helps in restricted environments where outbound UDP/53 is blocked. Note: RBL queries in `BlacklistMonitor` use the system DNS resolver and are not affected by this fallback.
 
 ## Security Considerations
 
-### Input Validation
+### Input Handling
 
-All domain inputs are sanitized:
-
-```python
-def clean_domain(raw_domain: str) -> str:
-    # Remove dangerous characters
-    # Validate format
-    # Normalize case
-    return safe_domain
-```
+Domain inputs are cleaned with `clean_domain()`: protocol, path, and port are stripped, and the result is lowercased. No regex validation of domain format is performed.
 
 ### Secrets Management
 
-- Never log secrets
-- Use environment variables
-- Support CI/CD secret injection
-- No secrets in code/config by default
+- Use environment variables for tokens/passwords
+- Environment variables take precedence over YAML config values
+- Avoid committing secrets to your repository
 
 ### Network Security
 
-- HTTPS for all external communications
-- Certificate validation enabled
-- Timeout protection
-- Rate limiting (future)
-
-### Dependency Security
-
-- Pin versions in requirements.txt
-- Regular updates
-- Vulnerability scanning
-- Minimal dependencies
+- SSL certificate validation enabled for HTTPS requests
+- Timeout protection on all network calls (2-5 seconds)
+- Security monitor makes one HTTPS HEAD request with `verify=False` fallback only to detect certificate trust issues
 
 ## Performance Characteristics
 
-### Time Complexity
+Approximate time per domain with all monitors enabled:
+- Domain check: 2-5 seconds (WHOIS)
+- SSL check: 1-3 seconds
+- DNS check: 1-2 seconds
+- Security check: 2-4 seconds
+- Blacklist check: 5-15 seconds (6 RBL queries)
 
-Per domain:
-- Domain check: O(1) - Single WHOIS query
-- SSL check: O(1) - Single connection
-- DNS check: O(n) - n = number of record types
-- Security check: O(1) - Single HTTP request
-- Blacklist check: O(m) - m = number of RBLs
+**Total per domain: ~15-30 seconds**
 
-Total: O(n + m) per domain
-
-### Space Complexity
-
-- In-memory: O(d × r) where d = domains, r = results per domain
-- Report file: O(d × r) - Linear growth with domains
-
-### Scalability
-
-**Current Limits:**
-- Sequential processing
-- ~2-5 minutes for 10 domains
-- Memory: <100 MB
-
-**Scaling Strategies:**
-1. Async processing (5-10x improvement)
-2. Distributed workers
-3. Caching results
-4. Rate limiting
-5. Database backend
+Checks run sequentially. For 10 domains, expect approximately 3-5 minutes.
 
 ## Extensibility
 
@@ -732,38 +449,6 @@ def test_end_to_end():
 ### Demo Mode
 
 Built-in testing with `--demo` flag generates mock data for validation.
-
-## Future Enhancements
-
-### Planned Features
-
-1. **Async Processing**: Concurrent domain checks
-2. **Database Backend**: Store historical data
-3. **Trend Analysis**: Track changes over time
-4. **Alerting Rules**: Custom thresholds per domain
-5. **Webhook Callbacks**: Real-time notifications
-6. **Multi-tenant Support**: Separate organizations
-7. **Role-based Access**: User permissions
-8. **API Authentication**: Secure API access
-9. **Prometheus Metrics**: Monitoring integration
-10. **Grafana Dashboards**: Visualization
-
-### Roadmap
-
-**Version 2.0:**
-- Async processing
-- API authentication
-- Database backend
-
-**Version 3.0:**
-- Historical tracking
-- Trend analysis
-- Alerting rules
-
-**Version 4.0:**
-- Multi-tenant
-- RBAC
-- Enterprise features
 
 ## Contributing
 
