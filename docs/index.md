@@ -4,7 +4,7 @@ layout: home
 hero:
   name: "DomainMate"
   text: "Domain & Security Monitoring"
-  tagline: High-resilience domain and security monitoring system for comprehensive asset auditing
+  tagline: A Python tool that checks domain expiration, SSL certificates, DNS security records, HTTP headers, and IP blacklist status.
   image:
     src: https://github.com/user-attachments/assets/cc700b8b-7fa5-41dd-ab33-67cbac77c57f
     alt: DomainMate Dashboard
@@ -19,31 +19,31 @@ hero:
 features:
   - icon: 🔍
     title: Domain Validity Monitoring
-    details: Tracks WHOIS expiration dates with intelligent parent domain awareness to prevent domain expiration.
+    details: WHOIS expiration tracking with parent domain detection for subdomains.
   - icon: 🔒
-    title: SSL/TLS Integrity
-    details: Validates certificate chains, expiration dates, and detects deprecated protocols (SSLv3, TLS 1.0/1.1).
+    title: SSL/TLS Check
+    details: Certificate expiration date and detection of deprecated TLS 1.0/1.1 protocols (where supported by the local OpenSSL build).
   - icon: 📧
-    title: DNS Security
-    details: Audits SPF, DMARC, and DKIM records for email security compliance.
+    title: DNS Security Records
+    details: Checks for SPF and DMARC records. DKIM is optional and not automatically detected.
   - icon: 🛡️
-    title: Reputation Monitoring
-    details: Checks IP reputation against major RBLs (Real-time Blackhole Lists) using hybrid resolution.
+    title: IP Reputation
+    details: Checks the domain's IP against common RBLs (Spamhaus, SORBS, SpamCop, Barracuda, UCEPROTECT) using standard DNS queries.
   - icon: 🔐
-    title: Security Posture Analysis
-    details: Analyzes HTTP headers for OWASP recommended configurations (HSTS, CSP, X-Frame-Options).
+    title: HTTP Security Headers
+    details: Checks for HSTS, CSP, X-Frame-Options, X-Content-Type-Options, and server information disclosure.
   - icon: 📊
-    title: Comprehensive Reporting
-    details: Generates static, self-contained HTML reports with DataTables integration for filtering and grouping.
-  - icon: 🚀
-    title: High Resilience
-    details: Custom RobustResolver with DoH failover mechanisms to bypass local resolver issues.
+    title: HTML Reports
+    details: Generates self-contained HTML reports with DataTables for filtering and sorting.
+  - icon: 🌐
+    title: DNS Fallback
+    details: RobustResolver tries multiple public DNS providers and falls back to DNS-over-HTTPS (Cloudflare) if all fail.
   - icon: 🔔
-    title: Multi-Channel Notifications
-    details: Supports GitHub/GitLab Issues, Telegram, Microsoft Teams, Email, and Webhooks.
+    title: Notifications
+    details: Sends alerts via GitHub Issues, GitLab Issues, Telegram, Microsoft Teams, Email, and generic Webhooks.
   - icon: 🐳
-    title: Containerized Deployment
-    details: Built on Python 3.12 with Docker support for easy deployment and CI/CD integration.
+    title: Docker & CI/CD
+    details: Includes a Dockerfile and example GitHub Actions / GitLab CI configurations.
 ---
 
 ## Quick Example
@@ -79,14 +79,7 @@ python src/cli.py --config config.yaml --notify
 
 ## Why DomainMate?
 
-DomainMate is engineered to function in **restricted network environments**, utilizing DNS-over-HTTPS (DoH) failover mechanisms to bypass local resolver issues or firewalls. It provides:
-
-- **Proactive Monitoring**: Get alerts before domains or certificates expire
-- **Security Compliance**: Ensure DNS security records and HTTP headers meet best practices
-- **Reputation Protection**: Monitor your domains against RBL listings
-- **Automated Reporting**: Generate comprehensive HTML reports with all audit results
-- **Flexible Notifications**: Receive alerts through your preferred channels
-- **CI/CD Ready**: Integrate seamlessly with GitHub Actions, GitLab CI, and other platforms
+DomainMate's DNS resolver (`RobustResolver`) tries multiple public resolvers and falls back to DNS-over-HTTPS if all standard DNS queries fail. This helps in restricted network environments where certain DNS servers may be blocked.
 
 ## Architecture Overview
 
@@ -103,7 +96,7 @@ DomainMate is engineered to function in **restricted network environments**, uti
 │  │   Monitor    │  │   Monitor    │                   │
 │  └──────────────┘  └──────────────┘                   │
 ├─────────────────────────────────────────────────────────┤
-│              RobustResolver (DoH Failover)              │
+│              RobustResolver (DoH Fallback)              │
 ├─────────────────────────────────────────────────────────┤
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ │
 │  │   Reports    │  │Notifications │  │     API      │ │
@@ -112,10 +105,6 @@ DomainMate is engineered to function in **restricted network environments**, uti
 └─────────────────────────────────────────────────────────┘
 ```
 
-## Live Demo
-
-Check out the [live report example](https://fabriziosalmi.github.io/domainmate/) to see DomainMate in action!
-
 ## Get Started
 
-Ready to start monitoring your domains? Head over to the [Getting Started](/getting-started) guide.
+Head over to the [Getting Started](/getting-started) guide.

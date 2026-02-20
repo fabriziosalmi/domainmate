@@ -1,39 +1,37 @@
 # DomainMate
 
-DomainMate is a domain and security monitoring system designed for high resilience and comprehensive asset auditing. It provides monitoring capabilities through robust DNS resolution strategies, deep SSL inspection, and hybrid blacklist monitoring.
+DomainMate is a domain and security monitoring tool. It checks WHOIS expiration dates, SSL certificate validity, DNS security records (SPF, DMARC), HTTP security headers, and IP reputation against common RBL blacklists.
 
 ![screenshot](screenshot.png)
 
-## 📚 Documentation
+## Documentation
 
-**[📖 Read the Full Documentation](https://fabriziosalmi.github.io/domainmate/)**
+**[Read the Full Documentation](https://fabriziosalmi.github.io/domainmate/)**
 
-The comprehensive documentation includes:
-- 🚀 [Getting Started Guide](https://fabriziosalmi.github.io/domainmate/getting-started)
-- ⚙️ [Configuration Reference](https://fabriziosalmi.github.io/domainmate/guide/configuration)
-- 🔍 [Monitor Types](https://fabriziosalmi.github.io/domainmate/guide/monitors)
-- 🔔 [Notification Setup](https://fabriziosalmi.github.io/domainmate/guide/notifications)
-- 🏗️ [Architecture Overview](https://fabriziosalmi.github.io/domainmate/reference/architecture)
-- 🛠️ [Troubleshooting](https://fabriziosalmi.github.io/domainmate/reference/troubleshooting)
+- [Getting Started Guide](https://fabriziosalmi.github.io/domainmate/getting-started)
+- [Configuration Reference](https://fabriziosalmi.github.io/domainmate/guide/configuration)
+- [Monitor Types](https://fabriziosalmi.github.io/domainmate/guide/monitors)
+- [Notification Setup](https://fabriziosalmi.github.io/domainmate/guide/notifications)
+- [Architecture Overview](https://fabriziosalmi.github.io/domainmate/reference/architecture)
+- [Troubleshooting](https://fabriziosalmi.github.io/domainmate/reference/troubleshooting)
 
 ## Overview
 
-The system is engineered to function in restricted network environments, utilizing DNS-over-HTTPS (DoH) failover mechanisms to bypass local resolver issues or firewalls. It performs in-depth analysis of domain health, including:
+DomainMate checks each configured domain sequentially across five monitors:
 
-*   **Domain Validity**: Tracks WHOIS expiration dates with intelligent parent domain awareness.
-*   **SSL/TLS integrity**: Validates certificate chains, expiration dates, and detects deprecated protocols (SSLv3, TLS 1.0/1.1).
-*   **DNS Security**: Audits SPF, DMARC, and DKIM records for email security compliance.
-*   **Reputation Monitoring**: checks IP reputation against major RBLs (Real-time Blackhole Lists) using a hybrid resolution strategy to differentiate between blocking and listing.
-*   **Security Posture**: Analyzes HTTP headers for OWASP recommended configurations (HSTS, CSP, X-Frame-Options) and information leakage.
+*   **Domain Validity**: WHOIS expiration tracking with parent domain detection for subdomains.
+*   **SSL/TLS**: Certificate expiration date and basic protocol check (TLS 1.0/1.1 detection where supported by the local OpenSSL build).
+*   **DNS Security**: Presence of SPF and DMARC records.
+*   **Reputation**: IP checked against common RBLs (Real-time Blackhole Lists) via standard DNS queries.
+*   **Security Headers**: HTTP response headers checked for HSTS, CSP, X-Frame-Options, X-Content-Type-Options, and server information disclosure.
 
 ## Architecture
 
-DomainMate is built on Python 3.12 and follows a modular architecture designed for containerized deployment.
+DomainMate is built on Python 3.12. Checks run sequentially per domain.
 
-*   **Core Engine**: AsyncIO-based execution for concurrent checks.
-*   **Resilience Layer**: Custom `RobustResolver` implementing a pool of public DNS providers (Cloudflare, Google, Quad9) with automatic DoH fallback.
-*   **Reporting**: Generates static, self-contained HTML reports with DataTables integration for client-side filtering and grouping.
-*   **Notification System**: Centralized dispatcher supporting GitHub Issues, GitLab Issues, Telegram, Microsoft Teams, Email, and generic Webhooks, featuring state management for alert aggregation and frequency control.
+*   **DNS Layer**: Custom `RobustResolver` tries a pool of public DNS servers (Cloudflare, Google, Quad9, OpenDNS) and falls back to DNS-over-HTTPS (Cloudflare) if all fail.
+*   **Reporting**: Generates static, self-contained HTML reports with DataTables integration.
+*   **Notification System**: Sends alerts via GitHub Issues, GitLab Issues, Telegram, Microsoft Teams, Email, and generic Webhooks. A `NotificationManager` (used separately from the CLI) adds deduplication and 24-hour cooldown.
 
 ## Installation
 
@@ -142,7 +140,7 @@ Include the provided `.gitlab-ci.yml` template in your repository to enable auto
 
 The repository includes a workflow in `.github/workflows/deploy.yml` configured to execute scans on a daily schedule (08:00 UTC) and publish reports as build artifacts.
 
-## 🛡️ Privacy & Secrets
+## Privacy & Secrets
 
 If you do not want to expose your domains in a public `config.yaml`:
 
