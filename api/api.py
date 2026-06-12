@@ -2,6 +2,7 @@ from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
 import asyncio
+from datetime import datetime
 from loguru import logger
 
 from src.monitors.domain_monitor import DomainMonitor
@@ -103,5 +104,3 @@ def get_metrics():
         "monitors_active": 4,
         "version": "1.0.0"
     }
-
-from datetime import datetime
