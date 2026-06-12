@@ -67,21 +67,10 @@ class SecurityMonitor:
             }
 
         except requests.exceptions.SSLError as e:
-            # Fallback: Check if it works without verification (Self-signed or Chain issue)
-            try:
-                requests.head(url, timeout=5, verify=False)
-                # If we are here, SSL is ON but Certificate is untrusted/invalid chain
-                logger.warning(f"SSL Valid but Untrusted for {domain}: {e}")
-                return {
-                    "monitor": "security",
-                    "status": "warning", 
-                    "message": "SSL Certificate Untrusted (Check Chain/Root)", 
-                    "details": str(e)
-                }
-            except Exception:
-                # Real handshake failure
-                logger.warning(f"SSL Verification failed for {domain}: {e}")
-                return {"monitor": "security", "status": "critical", "message": "SSL Verification Failed", "details": str(e)}
+            # Fallback: SSL verification failed — do NOT retry with verify=False
+            # Instead, log and report the failure as a critical issue
+            logger.warning(f"SSL Verification failed for {domain}: {e}")
+            return {"monitor": "security", "status": "critical", "message": "SSL Verification Failed", "details": str(e)}
         except requests.exceptions.Timeout:
             logger.warning(f"Timeout connecting to {domain}")
             return {"monitor": "security", "status": "warning", "message": "Connection Timeout"}
