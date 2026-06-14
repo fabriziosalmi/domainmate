@@ -1,5 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from typing import Optional, List
 import asyncio
 from datetime import datetime
@@ -29,6 +29,20 @@ class AnalyzeRequest(BaseModel):
     check_dns: bool = True
     check_security: bool = True
     check_blacklist: bool = True
+
+    @validator('domain')
+    def validate_domain(cls, v):
+        if not v or not isinstance(v, str):
+            raise ValueError('Domain must be a non-empty string')
+        v = v.strip().lower()
+        if not v:
+            raise ValueError('Domain must be a non-empty string')
+        # Basic domain validation: allow letters, digits, hyphens, dots, and at least one dot
+        import re
+        pattern = r'^(?=.{1,253}$)(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$'
+        if not re.match(pattern, v):
+            raise ValueError('Invalid domain format')
+        return v
 
 class TestNotificationRequest(BaseModel):
     title: str
