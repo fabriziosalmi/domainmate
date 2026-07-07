@@ -1,11 +1,7 @@
 import requests
 import socket
 import ssl
-import urllib3
 from loguru import logger
-
-# Suppress only the single warning from urllib3 needed.
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class SecurityMonitor:
     def check_security(self, domain: str) -> dict:
@@ -18,8 +14,8 @@ class SecurityMonitor:
         # 1. Header Checks
         url = f"https://{domain}"
         try:
-            # Timeout is crucial to avoid hanging
-            response = requests.head(url, timeout=5)
+            # allow_redirects: without it headers are read from the 3xx response, not the final page
+            response = requests.head(url, timeout=5, allow_redirects=True)
             headers = response.headers
 
             security_headers = {

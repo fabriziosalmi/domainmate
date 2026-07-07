@@ -1,9 +1,8 @@
-import os
 import aiohttp
 import smtplib
 from email.message import EmailMessage
 from datetime import datetime
-from typing import List, Optional
+from typing import Optional
 from pydantic_settings import BaseSettings
 from github import Github
 import gitlab
@@ -42,6 +41,8 @@ class NotificationSettings(BaseSettings):
         extra = "ignore"
 
 settings = NotificationSettings()
+
+HTTP_TIMEOUT = aiohttp.ClientTimeout(total=10)
 
 class NotificationService:
     def __init__(self, config: dict = None):
@@ -108,8 +109,9 @@ class NotificationService:
                 "text": f"*{title}*\n\n{message}",
                 "parse_mode": "Markdown"
             }
-            async with aiohttp.ClientSession() as session:
-                await session.post(url, json=payload)
+            async with aiohttp.ClientSession(timeout=HTTP_TIMEOUT) as session:
+                async with session.post(url, json=payload) as resp:
+                    resp.raise_for_status()
             logger.info("Telegram message sent.")
         except Exception as e:
             logger.error(f"Telegram notification failed: {e}")
@@ -133,8 +135,9 @@ class NotificationService:
                     "text": message
                 }]
             }
-            async with aiohttp.ClientSession() as session:
-                await session.post(url, json=payload)
+            async with aiohttp.ClientSession(timeout=HTTP_TIMEOUT) as session:
+                async with session.post(url, json=payload) as resp:
+                    resp.raise_for_status()
             logger.info("Teams webhook sent.")
         except Exception as e:
             logger.error(f"Teams notification failed: {e}")
@@ -176,8 +179,9 @@ class NotificationService:
                 "level": level,
                 "timestamp": datetime.now().isoformat()
             }
-            async with aiohttp.ClientSession() as session:
-                await session.post(url, json=payload)
+            async with aiohttp.ClientSession(timeout=HTTP_TIMEOUT) as session:
+                async with session.post(url, json=payload) as resp:
+                    resp.raise_for_status()
             logger.info("Generic Webhook sent.")
         except Exception as e:
             logger.error(f"Generic Webhook failed: {e}")

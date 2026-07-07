@@ -14,6 +14,8 @@ class BlacklistMonitor:
             "dnsbl-1.uceprotect.net"
         ]
         self.system_resolver = dns.resolver.Resolver()
+        self.system_resolver.timeout = 2.0
+        self.system_resolver.lifetime = 5.0
 
     def check_blacklist(self, domain: str) -> dict:
         """

@@ -1,9 +1,9 @@
-from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException
-from pydantic import BaseModel, validator
-from typing import Optional, List
 import asyncio
-from datetime import datetime
-from loguru import logger
+import re
+from datetime import datetime, timezone
+
+from fastapi import FastAPI, BackgroundTasks
+from pydantic import BaseModel, field_validator
 
 from src.monitors.domain_monitor import DomainMonitor
 from src.monitors.ssl_monitor import SSLMonitor
@@ -14,13 +14,16 @@ from src.notifications.service import NotificationService
 
 app = FastAPI(title="DomainMate API", version="1.0.0")
 
-# Initialize Services
 domain_monitor = DomainMonitor()
 ssl_monitor = SSLMonitor()
 dns_monitor = DNSMonitor()
 security_monitor = SecurityMonitor()
 blacklist_monitor = BlacklistMonitor()
 notifier = NotificationService()
+
+DOMAIN_PATTERN = re.compile(
+    r'^(?=.{1,253}$)(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$'
+)
 
 class AnalyzeRequest(BaseModel):
     domain: str
@@ -30,17 +33,13 @@ class AnalyzeRequest(BaseModel):
     check_security: bool = True
     check_blacklist: bool = True
 
-    @validator('domain')
+    @field_validator('domain')
+    @classmethod
     def validate_domain(cls, v):
-        if not v or not isinstance(v, str):
-            raise ValueError('Domain must be a non-empty string')
         v = v.strip().lower()
         if not v:
             raise ValueError('Domain must be a non-empty string')
-        # Basic domain validation: allow letters, digits, hyphens, dots, and at least one dot
-        import re
-        pattern = r'^(?=.{1,253}$)(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$'
-        if not re.match(pattern, v):
+        if not DOMAIN_PATTERN.match(v):
             raise ValueError('Invalid domain format')
         return v
 
@@ -55,47 +54,42 @@ async def analyze_domain(req: AnalyzeRequest, background_tasks: BackgroundTasks)
     Run selected monitors for a domain.
     If critical issues are found, trigger notifications.
     """
-    results = {}
-    
-    # 1. Domain Check
+    checks = []
     if req.check_domain:
-        results["domain"] = domain_monitor.check_domain(req.domain)
-    
-    # 2. SSL Check
+        checks.append(("domain", domain_monitor.check_domain))
     if req.check_ssl:
-        results["ssl"] = ssl_monitor.check_ssl(req.domain)
-
-    # 3. DNS Check
+        checks.append(("ssl", ssl_monitor.check_ssl))
     if req.check_dns:
-        results["dns"] = dns_monitor.check_dns(req.domain)
-
-    # 4. Security Check
+        checks.append(("dns", dns_monitor.check_dns))
     if req.check_security:
-        results["security"] = security_monitor.check_security(req.domain)
-
-    # 5. Blacklist Check
+        checks.append(("security", security_monitor.check_security))
     if req.check_blacklist:
-        results["blacklist"] = blacklist_monitor.check_blacklist(req.domain)
+        checks.append(("blacklist", blacklist_monitor.check_blacklist))
 
-    # Check for critical/warning issues to notify
+    # Monitors are blocking (whois/socket/dns): run them in threads to keep the event loop free
+    outputs = await asyncio.gather(
+        *(asyncio.to_thread(func, req.domain) for _, func in checks)
+    )
+    results = {name: output for (name, _), output in zip(checks, outputs)}
+
     issues = []
-    
-    # Helper to check status
     for monitor_name, res in results.items():
         if res.get("status") in ["critical", "error"]:
             issues.append(f"[{monitor_name.upper()}] Status: {res.get('status')} - {res.get('message', 'Check details')}")
         elif res.get("status") == "warning":
-             issues.append(f"[{monitor_name.upper()}] Warning: {res.get('message', 'Expiring soon or missing config')}")
+            issues.append(f"[{monitor_name.upper()}] Warning: {res.get('message', 'Expiring soon or missing config')}")
 
     if issues:
-        # Send Notification in background
         summary = f"Issues found for {req.domain}:\n" + "\n".join(issues)
-        level = "critical" if any("critical" in i or "error" in i for i in issues) else "warning"
+        has_critical = any(
+            res.get("status") in ["critical", "error"] for res in results.values()
+        )
+        level = "critical" if has_critical else "warning"
         background_tasks.add_task(notifier.send_notification, f"DomainMate Alert: {req.domain}", summary, level)
 
     return {
         "domain": req.domain,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "results": results,
         "issues_found": len(issues)
     }
@@ -110,11 +104,8 @@ async def test_notification(req: TestNotificationRequest, background_tasks: Back
 
 @app.get("/metrics")
 def get_metrics():
-    """
-    Exposing Prometheus-style metrics (mocked/simple for now).
-    """
     return {
         "status": "healthy",
-        "monitors_active": 4,
-        "version": "1.0.0"
+        "monitors_active": 5,
+        "version": app.version
     }

@@ -13,10 +13,8 @@ from src.monitors.blacklist_monitor import BlacklistMonitor
 from src.notifications.service import NotificationService
 from src.reporting.html_generator import HTMLGenerator
 import random
-import re
 from datetime import datetime, timedelta
-
-import socket
+from typing import Optional
 
 def clean_domain(raw_domain: str) -> str:
     """
@@ -45,7 +43,7 @@ def get_parent_domain(domain: str) -> str:
         return f"{parts[-2]}.{parts[-1]}"
     return domain
 
-def get_connectable_hostname(domain: str) -> str:
+def get_connectable_hostname(domain: str) -> Optional[str]:
     """
     Try to find a resolvable hostname. 
     1. Try exact domain.
@@ -129,10 +127,9 @@ async def main():
     parser.add_argument("--demo", action="store_true", help="Run with mock data for demonstration")
     args = parser.parse_args()
 
-    reporter = HTMLGenerator(output_dir="reports")
-
     if args.demo:
-        logger.info("🚀 Running in DEMO mode. Generating mock data...")
+        logger.info("Running in DEMO mode. Generating mock data...")
+        reporter = HTMLGenerator(output_dir="reports")
         all_results = get_demo_data()
         report_path = reporter.generate(all_results)
         logger.success(f"Demo Report generated at {report_path}")
@@ -160,8 +157,8 @@ async def main():
     security_monitor = SecurityMonitor()
     blacklist_monitor = BlacklistMonitor()
     notifier = NotificationService()
-    # Reporter already initialized above
     reporter = HTMLGenerator(output_dir=config.get("reports", {}).get("output_dir", "reports"))
+    monitors_cfg = config.get("monitors", {})
 
     all_results = []
     
@@ -177,7 +174,7 @@ async def main():
         
         # We sequentially check for now to be gentle, could be async gathered
         # 1. Domain (WHOIS always uses root/parent)
-        if config["monitors"]["domain"]["enabled"]:
+        if monitors_cfg.get("domain", {}).get("enabled", False):
             try:
                 # Use parent domain for WHOIS to avoid "No whois server found for subdomain" errors
                 check_target = parent_domain
@@ -190,7 +187,7 @@ async def main():
                 logger.error(f"Domain monitor failed for {domain}: {e}")
 
         # 2. SSL (Use connectable host)
-        if config["monitors"]["ssl"]["enabled"]:
+        if monitors_cfg.get("ssl", {}).get("enabled", False):
             if connectable_host:
                 res = ssl_monitor.check_ssl(connectable_host)
                 if connectable_host != domain:
@@ -208,7 +205,7 @@ async def main():
                 })
         
         # 3. DNS (Always root/parent)
-        if config["monitors"]["dns"]["enabled"]:
+        if monitors_cfg.get("dns", {}).get("enabled", False):
             check_target = parent_domain
             res = dns_monitor.check_dns(check_target)
             res["domain"] = domain
@@ -217,7 +214,7 @@ async def main():
             all_results.append(res)
 
         # 4. Security (Use connectable host)
-        if config["monitors"]["security"]["enabled"]:
+        if monitors_cfg.get("security", {}).get("enabled", False):
             if connectable_host:
                 res = security_monitor.check_security(connectable_host)
                 if connectable_host != domain:
@@ -235,7 +232,7 @@ async def main():
                 })
 
         # 5. Blacklist (Always root/IP mainly)
-        if config.get("monitors", {}).get("blacklist", {}).get("enabled", False):
+        if monitors_cfg.get("blacklist", {}).get("enabled", False):
             res = blacklist_monitor.check_blacklist(domain)
             res["domain"] = domain
             all_results.append(res)
@@ -244,31 +241,44 @@ async def main():
     report_path = reporter.generate(all_results)
     logger.success(f"Report generated at {report_path}")
 
+    timeout = aiohttp.ClientTimeout(total=15)
+
     # Heartbeat (Dead Man's Switch)
     heartbeat_url = config.get("heartbeat_url")
-    if heartbeat_url and not args.demo:
+    if heartbeat_url:
         try:
-            async with aiohttp.ClientSession() as session:
-                await session.get(heartbeat_url)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(heartbeat_url) as resp:
+                    resp.raise_for_status()
             logger.info("Heartbeat ping sent.")
         except Exception as e:
             logger.error(f"Failed to send heartbeat: {e}")
 
     # JSON API Upload
     api_url = config.get("api_url")
-    if api_url and not args.demo:
+    if api_url:
         try:
-            async with aiohttp.ClientSession() as session:
-                await session.post(api_url, json=all_results)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(api_url, json=all_results) as resp:
+                    resp.raise_for_status()
             logger.info(f"JSON Report uploaded to {api_url}")
         except Exception as e:
             logger.error(f"Failed to upload JSON report: {e}")
 
-    # Notifications (Aggregated via Manager)
+    # Notifications
     if args.notify:
-        warning_issues = [r for r in all_results if r.get("status") in ["warning", "critical"]]
-        msg = f"Found {len(warning_issues)} issue(s) requiring attention.\nCheck report for details."
-        await notifier.send_notification("DomainMate Alert", msg, "warning")
+        issues = [r for r in all_results if r.get("status") in ["warning", "critical", "error"]]
+        if not issues:
+            logger.info("No issues found, skipping notification.")
+        else:
+            level = "critical" if any(r.get("status") in ["critical", "error"] for r in issues) else "warning"
+            affected = sorted({r.get("domain", "unknown") for r in issues})
+            msg = (
+                f"Found {len(issues)} issue(s) requiring attention.\n"
+                f"Domains: {', '.join(affected)}\n"
+                f"Check report for details."
+            )
+            await notifier.send_notification("DomainMate Alert", msg, level)
 
 if __name__ == "__main__":
     asyncio.run(main())

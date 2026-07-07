@@ -18,7 +18,8 @@ class DNSMonitor:
             try:
                 txt_records = dns.resolver.resolve(domain, 'TXT')
                 for r in txt_records:
-                    txt_val = r.to_text().strip('"')
+                    # Join character-string fragments: long TXT records are split into 255-byte chunks
+                    txt_val = b"".join(r.strings).decode("utf-8", errors="replace")
                     results["txt"].append(txt_val)
                     if txt_val.startswith("v=spf1"):
                         results["spf"] = {"status": "present", "record": txt_val}
@@ -29,19 +30,18 @@ class DNSMonitor:
             try:
                 dmarc_records = dns.resolver.resolve(f"_dmarc.{domain}", 'TXT')
                 for r in dmarc_records:
-                    txt_val = r.to_text().strip('"')
+                    txt_val = b"".join(r.strings).decode("utf-8", errors="replace")
                     if txt_val.startswith("v=DMARC1"):
                         results["dmarc"] = {"status": "present", "record": txt_val}
             except Exception:
                 pass
 
-            # Logic for overall status
-            # If SPF or DMARC missing -> Warning
-            status = "ok"
-            if results["spf"]["status"] == "missing" or results["dmarc"]["status"] == "missing":
-                status = "warning"
-            
-            results["status"] = status
+            missing = [k for k in ("spf", "dmarc") if results[k]["status"] == "missing"]
+            results["status"] = "warning" if missing else "ok"
+            results["message"] = (
+                f"Missing: {', '.join(m.upper() for m in missing)}" if missing
+                else "SPF and DMARC present"
+            )
             return results
 
         except Exception as e:

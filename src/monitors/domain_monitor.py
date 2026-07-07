@@ -16,7 +16,7 @@ class DomainMonitor:
                 expiration_date = expiration_date[0]
             
             if not expiration_date:
-                return {"status": "error", "message": "Could not retrieve expiration date"}
+                return {"monitor": "domain", "status": "error", "message": "Could not retrieve expiration date"}
 
             # Handle Timedeltas with potentially timezone-aware datetimes
             now = datetime.now()
@@ -34,10 +34,10 @@ class DomainMonitor:
             return {
                 "monitor": "domain",
                 "status": status,
+                "message": f"Expires in {days_until_expiry} days",
                 "expiration_date": expiration_date.strftime("%Y-%m-%d"),
                 "days_until_expiry": days_until_expiry,
-                "registrar": w.registrar,
-                "details": w
+                "registrar": w.registrar
             }
         except Exception as e:
             logger.error(f"Error checking domain {domain}: {e}")

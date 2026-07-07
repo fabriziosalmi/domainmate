@@ -1,6 +1,5 @@
 import json
 import os
-import hashlib
 from datetime import datetime, timedelta
 from loguru import logger
 from collections import defaultdict
@@ -34,7 +33,7 @@ class NotificationManager:
         """Create a unique ID for an issue (Domain + Monitor Type)."""
         return f"{result['domain']}:{result['monitor']}"
 
-    def process_and_send(self, results: list):
+    async def process_and_send(self, results: list):
         """
         Process scan results, update state, aggregate, and send notifications.
         """
@@ -98,17 +97,17 @@ class NotificationManager:
 
         # 4. Send Aggregated Messages
         for domain, alerts in domain_groups.items():
-            self._send_aggregated_alert(domain, alerts)
+            await self._send_aggregated_alert(domain, alerts)
 
-    def _send_aggregated_alert(self, domain: str, alerts: list):
+    async def _send_aggregated_alert(self, domain: str, alerts: list):
         """Constructs a digest message for the domain."""
-        title = f"🚨 Security Alert: {domain}"
+        title = f"Security Alert: {domain}"
         lines = [f"Found {len(alerts)} issues for **{domain}**:"]
-        
+
         for alert in alerts:
-            icon = "🔴" if alert.get("status") == "critical" else "⚠️"
+            tag = "[CRIT]" if alert.get("status") == "critical" else "[WARN]"
             cnt = f"(Repeated {alert.get('alert_count')}x)" if alert.get("alert_count", 0) > 1 else "(New)"
-            lines.append(f"{icon} **{alert['monitor'].upper()}**: {alert.get('message', 'Unknown Error')} {cnt}")
+            lines.append(f"{tag} **{alert['monitor'].upper()}**: {alert.get('message', 'Unknown Error')} {cnt}")
             if "details" in alert:
                  # If details is list, join it
                  dets = alert['details']
@@ -119,4 +118,5 @@ class NotificationManager:
                       lines.append(f"   - {dets}")
 
         message = "\n".join(lines)
-        self.service.send(title, message)
+        level = "critical" if any(a.get("status") == "critical" for a in alerts) else "warning"
+        await self.service.send_notification(title, message, level)

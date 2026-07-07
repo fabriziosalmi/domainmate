@@ -1,6 +1,6 @@
 import os
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import json
 
 class HTMLGenerator:
@@ -179,7 +179,7 @@ class HTMLGenerator:
             <div class="kpi-card" style="border-left: 4px solid var(--success-text);">
                 <div class="kpi-label">Compliance Status</div>
                 <div class="kpi-value" style="color: var(--success-text);">
-                    {% if stats.critical == 0 and stats.warning == 0 %}100%{% else %}{{ ((results|length - stats.critical - stats.warning) / results|length * 100)|round|int }}%{% endif %}
+                    {% if results|length == 0 or (stats.critical == 0 and stats.warning == 0) %}100%{% else %}{{ ((results|length - stats.critical - stats.warning) / results|length * 100)|round|int }}%{% endif %}
                 </div>
                 <div class="text-secondary mt-1" style="font-size: 0.8em;">Operational Health</div>
             </div>
@@ -404,10 +404,11 @@ class HTMLGenerator:
                 if monitor in cat_stats:
                     cat_stats[monitor] += 1
 
+        now_utc = datetime.now(timezone.utc)
         html_content = template.render(
             results=results,
-            timestamp=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
-            timestamp_iso=datetime.utcnow().isoformat() + "Z", # ISO 8601 for JS
+            timestamp=now_utc.strftime("%Y-%m-%d %H:%M:%S UTC"),
+            timestamp_iso=now_utc.isoformat(), # ISO 8601 for JS
             stats=stats,
             cat_stats=cat_stats
         )

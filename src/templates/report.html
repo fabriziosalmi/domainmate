@@ -161,7 +161,7 @@
             <div class="kpi-card" style="border-left: 4px solid var(--success-text);">
                 <div class="kpi-label">Compliance Status</div>
                 <div class="kpi-value" style="color: var(--success-text);">
-                    {% if stats.critical == 0 and stats.warning == 0 %}100%{% else %}{{ ((results|length - stats.critical - stats.warning) / results|length * 100)|round|int }}%{% endif %}
+                    {% if results|length == 0 or (stats.critical == 0 and stats.warning == 0) %}100%{% else %}{{ ((results|length - stats.critical - stats.warning) / results|length * 100)|round|int }}%{% endif %}
                 </div>
                 <div class="text-secondary mt-1" style="font-size: 0.8em;">Operational Health</div>
             </div>

@@ -1,8 +1,8 @@
 import dns.resolver
+import dns.rdatatype
 import requests
 from loguru import logger
 import random
-import time
 
 class RobustResolver:
     """
@@ -82,10 +82,11 @@ class RobustResolver:
                 class DoHAnswer:
                     def __init__(self, val): self.val = val
                     def to_text(self): return self.val
-                    
+
+                wanted_type = dns.rdatatype.from_text(rdtype)
                 answers = []
                 for ans in data["Answer"]:
-                    if ans["type"] == 1: # A record
+                    if ans["type"] == wanted_type:
                         answers.append(DoHAnswer(ans["data"]))
                 
                 if answers:
