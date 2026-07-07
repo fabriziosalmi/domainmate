@@ -18,13 +18,8 @@ on:
   push:
     branches: [ main ]
 
-permissions:
-  contents: write
-  pages: write
-  id-token: write
-
 jobs:
-  audit-and-publish:
+  audit:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -41,21 +36,18 @@ jobs:
 
       - name: Run DomainMate
         env:
+          PYTHONPATH: .
           GITHUB_TOKEN: $\{{ secrets.GITHUB_TOKEN }}
           TELEGRAM_BOT_TOKEN: $\{{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: $\{{ secrets.TELEGRAM_CHAT_ID }}
         run: python src/cli.py --notify
 
       - name: Upload Report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: domainmate-report
           path: reports/
-
-      - name: Deploy to GitHub Pages
-        uses: actions/deploy-pages@v4
-        with:
-          artifact_name: domainmate-report
+          retention-days: 30
 ```
 
 ### Schedule Configuration
@@ -103,8 +95,12 @@ For keeping domains private in public repos:
 
 ```yaml
 - name: Inject Secret Config
-  if: $\{{ secrets.DOMAINMATE_CONFIG_CONTENT != '' }}
-  run: echo "$\{{ secrets.DOMAINMATE_CONFIG_CONTENT }}" > config.yaml
+  env:
+    CONFIG_CONTENT: $\{{ secrets.DOMAINMATE_CONFIG_CONTENT }}
+  run: |
+    if [ -n "$CONFIG_CONTENT" ]; then
+      printf '%s\n' "$CONFIG_CONTENT" > config.yaml
+    fi
 ```
 
 ### Artifacts
@@ -128,6 +124,10 @@ Access artifacts:
 ### GitHub Pages Deployment
 
 Enable GitHub Pages in **Settings → Pages → Source: GitHub Actions**
+
+::: warning
+Publishing scan reports to public GitHub Pages exposes your domains' security posture (missing headers, expiring certificates, blacklist status). Use this pattern only on private repositories. In this repository, Pages hosts the documentation site; reports are kept as private build artifacts.
+:::
 
 ```yaml
 - name: Setup Pages
@@ -620,8 +620,12 @@ jobs:
         run: pip install -r requirements.txt
       
       - name: Inject Secret Config
-        if: $\{{ secrets.DOMAINMATE_CONFIG_CONTENT != '' }}
-        run: echo "$\{{ secrets.DOMAINMATE_CONFIG_CONTENT }}" > config.yaml
+        env:
+          CONFIG_CONTENT: $\{{ secrets.DOMAINMATE_CONFIG_CONTENT }}
+        run: |
+          if [ -n "$CONFIG_CONTENT" ]; then
+            printf '%s\n' "$CONFIG_CONTENT" > config.yaml
+          fi
       
       - name: Run DomainMate
         env:

@@ -1,4 +1,4 @@
-name: 📚 Deploy VitePress Documentation
+name: Deploy VitePress Documentation
 
 on:
   push:
@@ -25,23 +25,23 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 Checkout
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0 # For lastUpdated feature
 
-      - name: 🟢 Setup Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: 📦 Install dependencies
+      - name: Install dependencies
         run: npm install
 
-      - name: 🏗️ Build VitePress site
+      - name: Build VitePress site
         run: npm run docs:build
 
-      - name: 📤 Upload artifact
+      - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: docs/.vitepress/dist
@@ -52,8 +52,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     needs: build
     runs-on: ubuntu-latest
-    name: 🚀 Deploy
+    name: Deploy
     steps:
-      - name: 🌐 Deploy to GitHub Pages
+      - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

@@ -3,7 +3,7 @@ import smtplib
 from email.message import EmailMessage
 from datetime import datetime
 from typing import Optional
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from github import Github
 import gitlab
 from loguru import logger
@@ -36,9 +36,7 @@ class NotificationSettings(BaseSettings):
     # Generic Webhook
     GENERIC_WEBHOOK_URL: Optional[str] = None
 
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 settings = NotificationSettings()
 

@@ -132,13 +132,9 @@ The following environment variables takes precedence over file configuration:
 
 ## CI/CD Integration
 
-### GitLab CI
-
-Include the provided `.gitlab-ci.yml` template in your repository to enable automated daily scanning pipelines.
-
 ### GitHub Actions
 
-The repository includes a workflow in `.github/workflows/deploy.yml` configured to execute scans on a daily schedule (08:00 UTC) and publish reports as build artifacts.
+The repository includes a workflow in `.github/workflows/main.yml` configured to execute scans on a daily schedule (08:00 UTC) and publish reports as build artifacts.
 
 ## Privacy & Secrets
 

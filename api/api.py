@@ -12,7 +12,7 @@ from src.monitors.security_monitor import SecurityMonitor
 from src.monitors.blacklist_monitor import BlacklistMonitor
 from src.notifications.service import NotificationService
 
-app = FastAPI(title="DomainMate API", version="1.0.0")
+app = FastAPI(title="DomainMate API", version="0.4.0")
 
 domain_monitor = DomainMonitor()
 ssl_monitor = SSLMonitor()

@@ -30,6 +30,9 @@ EXPOSE 8000
 
 ENV PYTHONPATH=/app
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -fsS http://localhost:8000/metrics || exit 1
+
 # Default command: Run the API. 
 # Override to run CLI: docker run ... python src/cli.py
 CMD ["uvicorn", "api.api:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -175,8 +175,8 @@ Returns basic health and status information.
 ```json
 {
   "status": "healthy",
-  "monitors_active": 4,
-  "version": "1.0.0"
+  "monitors_active": 5,
+  "version": "0.4.0"
 }
 ```
 

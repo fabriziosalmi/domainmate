@@ -91,15 +91,7 @@ Uses production config and enables notifications.
 python src/cli.py --demo
 ```
 
-Generates mock report for testing.
-
-### Demo with Notifications
-
-```bash
-python src/cli.py --demo --notify
-```
-
-Tests notification channels with mock data.
+Generates mock report for testing. Demo mode only produces the report: notifications, heartbeat and JSON upload are skipped even if configured.
 
 ## Environment Variables
 
