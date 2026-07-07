@@ -87,15 +87,15 @@ def get_demo_data():
             "message": f"Expires in {days} days"
         })
 
-        # 2. SSL
-        ssl_days = random.choice([3, 100, 365])
+        # 2. SSL (one expired cert to showcase that state)
+        ssl_days = -12 if d == "legacy-system.org" else random.choice([3, 100, 365])
         ssl_status = "ok"
         if ssl_days < 7: ssl_status = "critical"
         elif ssl_days < 30: ssl_status = "warning"
         results.append({
             "domain": d, "monitor": "ssl", "status": ssl_status,
             "days_until_expiry": ssl_days, "expiration_date": (datetime.now() + timedelta(days=ssl_days)).strftime("%Y-%m-%d"),
-            "message": f"Expires in {ssl_days} days"
+            "message": f"Expired {-ssl_days} days ago" if ssl_days < 0 else f"Expires in {ssl_days} days"
         })
 
         # 3. DNS
