@@ -91,9 +91,9 @@ class SecurityMonitor(BaseMonitor):
         weak_protocols = []
         protocols_to_test = []
         if hasattr(ssl, "PROTOCOL_TLSv1"):
-            protocols_to_test.append(("TLSv1.0", ssl.PROTOCOL_TLSv1))  # noqa: E501 # type: ignore[attr-defined]
+            protocols_to_test.append(("TLSv1.0", ssl.PROTOCOL_TLSv1))
         if hasattr(ssl, "PROTOCOL_TLSv1_1"):
-            protocols_to_test.append(("TLSv1.1", ssl.PROTOCOL_TLSv1_1))  # noqa: E501 # type: ignore[attr-defined]
+            protocols_to_test.append(("TLSv1.1", ssl.PROTOCOL_TLSv1_1))
 
         for name, proto_version in protocols_to_test:
             try:

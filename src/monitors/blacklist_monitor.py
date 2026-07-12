@@ -2,7 +2,7 @@ import dns.resolver
 import socket
 from loguru import logger
 from src.monitors.base_monitor import BaseMonitor
-from src.constants import DEFAULT_RBLS
+from src.constants import DEFAULT_RBLS, RBL_BLOCKED_PREFIX, RBL_PBL_IPS
 
 
 class BlacklistMonitor(BaseMonitor):
@@ -44,14 +44,14 @@ class BlacklistMonitor(BaseMonitor):
                     result_ip = rdata.to_text()
 
                     # Query blocked / refused (e.g. 127.255.255.x via public DNS)
-                    if result_ip.startswith("127.255.255."):
+                    if result_ip.startswith(RBL_BLOCKED_PREFIX):
                         logger.warning(
                             f"RBL {rbl} blocked query for {domain} (Code: {result_ip}). Using public DNS?"
                         )
                         continue
 
                     # PBL / Policy listings — dynamic/consumer IPs, not actionable
-                    if result_ip in ("127.0.0.10", "127.0.0.11"):
+                    if result_ip in RBL_PBL_IPS:
                         continue
 
                     if rbl not in listed_in:
