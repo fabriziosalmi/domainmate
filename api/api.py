@@ -1,9 +1,14 @@
 import asyncio
 import re
 from datetime import datetime, timezone
+from typing import Literal
 
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from src.monitors.domain_monitor import DomainMonitor
 from src.monitors.ssl_monitor import SSLMonitor
@@ -12,7 +17,22 @@ from src.monitors.security_monitor import SecurityMonitor
 from src.monitors.blacklist_monitor import BlacklistMonitor
 from src.notifications.service import NotificationService
 
+limiter = Limiter(key_func=get_remote_address)
+
 app = FastAPI(title="DomainMate API", version="0.4.0")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# ── Security headers middleware ───────────────────────────────────────────────
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=()"
+    return response
 
 domain_monitor = DomainMonitor()
 ssl_monitor = SSLMonitor()
@@ -46,13 +66,15 @@ class AnalyzeRequest(BaseModel):
 class TestNotificationRequest(BaseModel):
     title: str
     message: str
-    level: str = "info" # info, warning, critical
+    level: Literal["info", "warning", "critical"] = "info"
 
 @app.post("/analyze")
-async def analyze_domain(req: AnalyzeRequest, background_tasks: BackgroundTasks):
+@limiter.limit("10/minute")
+async def analyze_domain(request: Request, req: AnalyzeRequest, background_tasks: BackgroundTasks):
     """
     Run selected monitors for a domain.
     If critical issues are found, trigger notifications.
+    Rate limited to 10 requests/minute per IP.
     """
     checks = []
     if req.check_domain:
@@ -95,9 +117,11 @@ async def analyze_domain(req: AnalyzeRequest, background_tasks: BackgroundTasks)
     }
 
 @app.post("/notify/test")
-async def test_notification(req: TestNotificationRequest, background_tasks: BackgroundTasks):
+@limiter.limit("5/minute")
+async def test_notification(request: Request, req: TestNotificationRequest, background_tasks: BackgroundTasks):
     """
     Test the notification configuration.
+    Rate limited to 5 requests/minute per IP.
     """
     background_tasks.add_task(notifier.send_notification, req.title, req.message, req.level)
     return {"status": "queued", "message": "Notification task added to background queue."}

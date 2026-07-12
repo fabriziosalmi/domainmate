@@ -10,3 +10,5 @@ PyGithub
 python-gitlab
 pydantic-settings
 loguru
+slowapi
+filelock

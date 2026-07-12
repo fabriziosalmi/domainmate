@@ -1,22 +1,25 @@
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from loguru import logger
 from collections import defaultdict
+from filelock import FileLock
 from src.notifications.service import NotificationService
 
 class NotificationManager:
     def __init__(self, config: dict, state_file: str = "reports/notification_state.json"):
         self.config = config
         self.state_file = state_file
+        self._lock = FileLock(f"{state_file}.lock")
         self.service = NotificationService(config)
         self.state = self._load_state()
 
     def _load_state(self) -> dict:
         if os.path.exists(self.state_file):
             try:
-                with open(self.state_file, "r") as f:
-                    return json.load(f)
+                with self._lock:
+                    with open(self.state_file, "r") as f:
+                        return json.load(f)
             except Exception as e:
                 logger.error(f"Failed to load notification state: {e}")
         return {}
@@ -24,8 +27,9 @@ class NotificationManager:
     def _save_state(self):
         try:
             os.makedirs(os.path.dirname(self.state_file), exist_ok=True)
-            with open(self.state_file, "w") as f:
-                json.dump(self.state, f, indent=2, default=str)
+            with self._lock:
+                with open(self.state_file, "w") as f:
+                    json.dump(self.state, f, indent=2, default=str)
         except Exception as e:
             logger.error(f"Failed to save notification state: {e}")
 
@@ -37,6 +41,8 @@ class NotificationManager:
         """
         Process scan results, update state, aggregate, and send notifications.
         """
+        now = datetime.now(timezone.utc)
+
         # 1. Identify current issues
         current_issues = {}
         alerts_to_send = []
@@ -50,12 +56,15 @@ class NotificationManager:
                 if issue_id in self.state:
                     data = self.state[issue_id]
                     last_sent = datetime.fromisoformat(data["last_sent"])
-                    
+                    # Ensure timezone-aware for comparison
+                    if last_sent.tzinfo is None:
+                        last_sent = last_sent.replace(tzinfo=timezone.utc)
+
                     # Policy: Only resend if > 24h passed
-                    if datetime.now() - last_sent > timedelta(hours=24):
+                    if now - last_sent > timedelta(hours=24):
                         data["count"] += 1
-                        data["last_sent"] = datetime.now().isoformat()
-                        res["alert_count"] = data["count"] # Inject count for msg
+                        data["last_sent"] = now.isoformat()
+                        res["alert_count"] = data["count"]
                         alerts_to_send.append(res)
                         logger.info(f"Resending alert for {issue_id} (Count: {data['count']})")
                     else:
@@ -63,18 +72,16 @@ class NotificationManager:
                 else:
                     # New Issue
                     self.state[issue_id] = {
-                        "first_seen": datetime.now().isoformat(),
-                        "last_sent": datetime.now().isoformat(),
+                        "first_seen": now.isoformat(),
+                        "last_sent": now.isoformat(),
                         "count": 1,
                         "monitor": res["monitor"],
-                        "domain": res["domain"]
+                        "domain": res["domain"],
                     }
                     res["alert_count"] = 1
                     alerts_to_send.append(res)
 
-        # 2. Cleanup Resolved Issues (Optional: Send 'Fixed' notification?)
-        # For now, just remove from state so if it reappears, count resets.
-        # Or keep it for history? Let's remove to keep file small.
+        # 2. Cleanup Resolved Issues
         ids_to_remove = []
         for issue_id in self.state:
             if issue_id not in current_issues:
@@ -109,13 +116,12 @@ class NotificationManager:
             cnt = f"(Repeated {alert.get('alert_count')}x)" if alert.get("alert_count", 0) > 1 else "(New)"
             lines.append(f"{tag} **{alert['monitor'].upper()}**: {alert.get('message', 'Unknown Error')} {cnt}")
             if "details" in alert:
-                 # If details is list, join it
-                 dets = alert['details']
-                 if isinstance(dets, list):
-                     for d in dets[:3]: # Limit detail lines
-                         lines.append(f"   - {d}")
-                 elif isinstance(dets, str):
-                      lines.append(f"   - {dets}")
+                dets = alert["details"]
+                if isinstance(dets, list):
+                    for d in dets[:3]:
+                        lines.append(f"   - {d}")
+                elif isinstance(dets, str):
+                    lines.append(f"   - {dets}")
 
         message = "\n".join(lines)
         level = "critical" if any(a.get("status") == "critical" for a in alerts) else "warning"

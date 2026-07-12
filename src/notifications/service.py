@@ -1,12 +1,14 @@
 import aiohttp
 import smtplib
 from email.message import EmailMessage
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
+from urllib.parse import urlparse
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from github import Github
 import gitlab
 from loguru import logger
+from src.constants import TIMEOUT_HTTP
 
 class NotificationSettings(BaseSettings):
     # GitHub
@@ -40,7 +42,29 @@ class NotificationSettings(BaseSettings):
 
 settings = NotificationSettings()
 
-HTTP_TIMEOUT = aiohttp.ClientTimeout(total=10)
+HTTP_TIMEOUT = aiohttp.ClientTimeout(total=TIMEOUT_HTTP)
+
+# Allowed URL schemes for webhook / external URLs
+_ALLOWED_SCHEMES = {"https"}
+
+
+def _validate_webhook_url(url: str) -> str:
+    """
+    Validate that a webhook URL:
+    - uses HTTPS (prevents credential exposure over plain HTTP)
+    - has a non-empty hostname (prevents SSRF to bare IPs / localhost)
+
+    Returns the URL unchanged if valid; raises ValueError otherwise.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in _ALLOWED_SCHEMES:
+        raise ValueError(
+            f"Webhook URL must use HTTPS, got scheme '{parsed.scheme}'"
+        )
+    if not parsed.hostname:
+        raise ValueError("Webhook URL is missing a hostname")
+    return url
+
 
 class NotificationService:
     def __init__(self, config: dict = None):
@@ -50,6 +74,12 @@ class NotificationService:
         """
         self.config = config or {}
         
+    def _get_config_value(self, channel: str, key: str, env_value: Optional[str] = None) -> Optional[str]:
+        """
+        Retrieve a config value, preferring env var over YAML config.
+        """
+        return env_value or self.config.get("notifications", {}).get(channel, {}).get(key)
+
     async def send_notification(self, title: str, message: str, level: str = "info"):
         """
         Send notification to all configured channels.
@@ -64,8 +94,8 @@ class NotificationService:
         await self._send_webhook(title, message, level)
 
     async def _send_github_issue(self, title: str, body: str, level: str):
-        token = settings.GITHUB_TOKEN or self.config.get("notifications", {}).get("github", {}).get("token")
-        repo_name = settings.GITHUB_REPO or self.config.get("notifications", {}).get("github", {}).get("repo")
+        token = self._get_config_value("github", "token", settings.GITHUB_TOKEN)
+        repo_name = self._get_config_value("github", "repo", settings.GITHUB_REPO)
         
         if not (token and repo_name and level == "critical"):
             return
@@ -79,8 +109,8 @@ class NotificationService:
             logger.error(f"GitHub notification failed: {e}")
 
     async def _send_gitlab_issue(self, title: str, body: str, level: str):
-        token = settings.GITLAB_TOKEN or self.config.get("notifications", {}).get("gitlab", {}).get("token")
-        pid = settings.GITLAB_PROJECT_ID or self.config.get("notifications", {}).get("gitlab", {}).get("project_id")
+        token = self._get_config_value("gitlab", "token", settings.GITLAB_TOKEN)
+        pid = self._get_config_value("gitlab", "project_id", settings.GITLAB_PROJECT_ID)
         
         if not (token and pid and level == "critical"):
             return
@@ -94,8 +124,8 @@ class NotificationService:
             logger.error(f"GitLab notification failed: {e}")
 
     async def _send_telegram(self, title: str, message: str):
-        token = settings.TELEGRAM_BOT_TOKEN or self.config.get("notifications", {}).get("telegram", {}).get("bot_token")
-        chat_id = settings.TELEGRAM_CHAT_ID or self.config.get("notifications", {}).get("telegram", {}).get("chat_id")
+        token = self._get_config_value("telegram", "bot_token", settings.TELEGRAM_BOT_TOKEN)
+        chat_id = self._get_config_value("telegram", "chat_id", settings.TELEGRAM_CHAT_ID)
         
         if not (token and chat_id):
             return
@@ -115,11 +145,17 @@ class NotificationService:
             logger.error(f"Telegram notification failed: {e}")
 
     async def _send_teams(self, title: str, message: str, level: str):
-        url = settings.TEAMS_WEBHOOK_URL or self.config.get("notifications", {}).get("teams", {}).get("webhook_url")
-        
-        if not url:
+        raw_url = self._get_config_value("teams", "webhook_url", settings.TEAMS_WEBHOOK_URL)
+
+        if not raw_url:
             return
-            
+
+        try:
+            url = _validate_webhook_url(raw_url)
+        except ValueError as e:
+            logger.error(f"Teams webhook URL rejected: {e}")
+            return
+
         try:
             color = "FF0000" if level == "critical" else "00FF00"
             payload = {
@@ -141,7 +177,6 @@ class NotificationService:
             logger.error(f"Teams notification failed: {e}")
 
     async def _send_email(self, title: str, body: str):
-        # Email config is complex, usually prefer ENV but support config too
         srv = settings.EMAIL_SMTP_SERVER
         to = settings.EMAIL_TO
         
@@ -165,17 +200,23 @@ class NotificationService:
             logger.error(f"Email notification failed: {e}")
 
     async def _send_webhook(self, title: str, message: str, level: str):
-        url = settings.GENERIC_WEBHOOK_URL or self.config.get("notifications", {}).get("webhook", {}).get("url")
-        
-        if not url:
+        raw_url = self._get_config_value("webhook", "url", settings.GENERIC_WEBHOOK_URL)
+
+        if not raw_url:
             return
-            
+
+        try:
+            url = _validate_webhook_url(raw_url)
+        except ValueError as e:
+            logger.error(f"Generic webhook URL rejected: {e}")
+            return
+
         try:
             payload = {
                 "title": title,
                 "message": message,
                 "level": level,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
             async with aiohttp.ClientSession(timeout=HTTP_TIMEOUT) as session:
                 async with session.post(url, json=payload) as resp:
