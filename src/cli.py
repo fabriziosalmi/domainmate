@@ -4,6 +4,7 @@ import argparse
 import sys
 import os
 import aiohttp
+from urllib.parse import urlparse
 from loguru import logger
 from src.monitors.domain_monitor import DomainMonitor
 from src.monitors.ssl_monitor import SSLMonitor
@@ -13,8 +14,9 @@ from src.monitors.blacklist_monitor import BlacklistMonitor
 from src.notifications.service import NotificationService
 from src.reporting.html_generator import HTMLGenerator
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
+from src.constants import TIMEOUT_CLI_HTTP
 
 def clean_domain(raw_domain: str) -> str:
     """
@@ -33,6 +35,24 @@ def clean_domain(raw_domain: str) -> str:
         raw_domain = raw_domain.split(":")[0]
         
     return raw_domain.strip().lower()
+
+def _validate_url(url: str, label: str) -> bool:
+    """
+    Validate that a URL uses http or https and has a non-empty hostname.
+    Logs a warning and returns False if the URL is rejected.
+    """
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            logger.warning(f"{label} URL rejected: scheme '{parsed.scheme}' is not http/https")
+            return False
+        if not parsed.hostname:
+            logger.warning(f"{label} URL rejected: missing hostname")
+            return False
+        return True
+    except Exception as e:
+        logger.warning(f"{label} URL validation error: {e}")
+        return False
 
 def get_parent_domain(domain: str) -> str:
     """
@@ -83,7 +103,7 @@ def get_demo_data():
         
         results.append({
             "domain": d, "monitor": "domain", "status": status,
-            "days_until_expiry": days, "expiration_date": (datetime.now() + timedelta(days=days)).strftime("%Y-%m-%d"),
+            "days_until_expiry": days, "expiration_date": (datetime.now(timezone.utc) + timedelta(days=days)).strftime("%Y-%m-%d"),
             "message": f"Expires in {days} days"
         })
 
@@ -94,7 +114,7 @@ def get_demo_data():
         elif ssl_days < 30: ssl_status = "warning"
         results.append({
             "domain": d, "monitor": "ssl", "status": ssl_status,
-            "days_until_expiry": ssl_days, "expiration_date": (datetime.now() + timedelta(days=ssl_days)).strftime("%Y-%m-%d"),
+            "days_until_expiry": ssl_days, "expiration_date": (datetime.now(timezone.utc) + timedelta(days=ssl_days)).strftime("%Y-%m-%d"),
             "message": f"Expired {-ssl_days} days ago" if ssl_days < 0 else f"Expires in {ssl_days} days"
         })
 
@@ -241,29 +261,31 @@ async def main():
     report_path = reporter.generate(all_results)
     logger.success(f"Report generated at {report_path}")
 
-    timeout = aiohttp.ClientTimeout(total=15)
+    timeout = aiohttp.ClientTimeout(total=TIMEOUT_CLI_HTTP)
 
     # Heartbeat (Dead Man's Switch)
     heartbeat_url = config.get("heartbeat_url")
     if heartbeat_url:
-        try:
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(heartbeat_url) as resp:
-                    resp.raise_for_status()
-            logger.info("Heartbeat ping sent.")
-        except Exception as e:
-            logger.error(f"Failed to send heartbeat: {e}")
+        if _validate_url(heartbeat_url, "Heartbeat"):
+            try:
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.get(heartbeat_url) as resp:
+                        resp.raise_for_status()
+                logger.info("Heartbeat ping sent.")
+            except Exception as e:
+                logger.error(f"Failed to send heartbeat: {e}")
 
     # JSON API Upload
     api_url = config.get("api_url")
     if api_url:
-        try:
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(api_url, json=all_results) as resp:
-                    resp.raise_for_status()
-            logger.info(f"JSON Report uploaded to {api_url}")
-        except Exception as e:
-            logger.error(f"Failed to upload JSON report: {e}")
+        if _validate_url(api_url, "API upload"):
+            try:
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.post(api_url, json=all_results) as resp:
+                        resp.raise_for_status()
+                logger.info(f"JSON Report uploaded to {api_url}")
+            except Exception as e:
+                logger.error(f"Failed to upload JSON report: {e}")
 
     # Notifications
     if args.notify:

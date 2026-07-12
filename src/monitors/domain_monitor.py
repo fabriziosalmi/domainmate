@@ -1,44 +1,39 @@
 import whois
-from datetime import datetime
-from loguru import logger
+from datetime import datetime, timezone
+from src.monitors.base_monitor import BaseMonitor
 
-class DomainMonitor:
+
+class DomainMonitor(BaseMonitor):
+    monitor_name = "domain"
+
     def check_domain(self, domain: str) -> dict:
-        """
-        Check domain expiration and status using WHOIS.
-        """
-        try:
-            w = whois.whois(domain)
-            
-            # Handle list of dates (some registrars return list)
-            expiration_date = w.expiration_date
-            if isinstance(expiration_date, list):
-                expiration_date = expiration_date[0]
-            
-            if not expiration_date:
-                return {"monitor": "domain", "status": "error", "message": "Could not retrieve expiration date"}
+        """Check domain expiration and status using WHOIS."""
+        return self.check(domain)
 
-            # Handle Timedeltas with potentially timezone-aware datetimes
-            now = datetime.now()
-            if expiration_date.tzinfo:
-                now = now.replace(tzinfo=expiration_date.tzinfo)
-            
-            days_until_expiry = (expiration_date - now).days
-            
-            status = "ok"
-            if days_until_expiry < 30:
-                status = "warning"
-            if days_until_expiry < 7:
-                status = "critical"
+    def _run_check(self, domain: str) -> dict:
+        w = whois.whois(domain)
 
-            return {
-                "monitor": "domain",
-                "status": status,
-                "message": f"Expires in {days_until_expiry} days",
-                "expiration_date": expiration_date.strftime("%Y-%m-%d"),
-                "days_until_expiry": days_until_expiry,
-                "registrar": w.registrar
-            }
-        except Exception as e:
-            logger.error(f"Error checking domain {domain}: {e}")
-            return {"monitor": "domain", "status": "error", "message": str(e)}
+        # Handle list of dates (some registrars return a list)
+        expiration_date = w.expiration_date
+        if isinstance(expiration_date, list):
+            # Guard against empty list
+            expiration_date = expiration_date[0] if expiration_date else None
+
+        if not expiration_date:
+            return self._error_result("Could not retrieve expiration date")
+
+        # Normalise to UTC so comparison is always timezone-aware
+        if expiration_date.tzinfo is None:
+            expiration_date = expiration_date.replace(tzinfo=timezone.utc)
+
+        days_until_expiry = (expiration_date - datetime.now(timezone.utc)).days
+        status = self.get_expiry_status(days_until_expiry)
+
+        return {
+            "monitor": self.monitor_name,
+            "status": status,
+            "message": f"Expires in {days_until_expiry} days",
+            "expiration_date": expiration_date.strftime("%Y-%m-%d"),
+            "days_until_expiry": days_until_expiry,
+            "registrar": w.registrar,
+        }
