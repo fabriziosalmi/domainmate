@@ -150,7 +150,7 @@ A comprehensive table showing all domains with:
 - Technical metadata
 - Expiry information
 
-![DomainMate Report](https://github.com/user-attachments/assets/cc700b8b-7fa5-41dd-ab33-67cbac77c57f)
+![DomainMate Report](/report-preview.png)
 
 ## Configuration File Location
 

@@ -6,7 +6,7 @@ hero:
   text: "Domain & Security Monitoring"
   tagline: A Python tool that checks domain expiration, SSL certificates, DNS security records, HTTP headers, and IP blacklist status.
   image:
-    src: https://github.com/user-attachments/assets/cc700b8b-7fa5-41dd-ab33-67cbac77c57f
+    src: /report-preview.png
     alt: DomainMate Dashboard
   actions:
     - theme: brand
