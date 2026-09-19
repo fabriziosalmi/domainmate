@@ -150,7 +150,7 @@ ritorno incoerenti in `src/utils/dns_helpers.py`.
 
 **Il problema.** `src/cli.py` chiama `sys.exit()` solo in due punti (righe 166 e
 171) e solo per errori di configurazione. Dopo una scansione riuscita il processo
-esce **sempre con 0**, anche con certificati scaduti e domini in blacklist.
+esce **sempre con 0**, anche con certificati scaduti e IP elencati in un RBL.
 
 **Perché conta.** Il README documenta l'integrazione CI/CD come caso d'uso
 primario. Oggi nessuna pipeline può fallire su un finding: l'audit gira, trova
