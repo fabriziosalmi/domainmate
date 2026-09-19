@@ -75,7 +75,7 @@ lose the report that explains *why* it failed.
 
 Pick the level that matches how you want to be interrupted:
 
-- `--fail-on critical` — red only for expired certificates, blacklisted IPs and
+- `--fail-on critical` — red only for expired certificates, IPs listed in an RBL and
   unreachable hosts. A reasonable default for a scheduled audit.
 - `--fail-on warning` — also red for anything expiring soon or missing an SPF or
   DMARC record. Better suited to a pre-deploy gate than a nightly run.
