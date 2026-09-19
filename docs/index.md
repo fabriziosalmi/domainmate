@@ -34,7 +34,7 @@ features:
     details: Checks for HSTS, CSP, X-Frame-Options, X-Content-Type-Options, and server information disclosure.
   - icon: 📊
     title: HTML Reports
-    details: Generates self-contained HTML reports with DataTables for filtering and sorting.
+    details: Generates genuinely self-contained HTML reports. Sorting, search, grouping and filtering are inline; the file makes no external requests and works offline.
   - icon: 🌐
     title: DNS Fallback
     details: RobustResolver tries multiple public DNS providers and falls back to DNS-over-HTTPS (Cloudflare) if all fail.

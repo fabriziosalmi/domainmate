@@ -188,8 +188,9 @@ A typo that looks applied but is not is worse than one that errors, so the
 warning names exactly where the key sits.
 
 Reports are generated as self-contained HTML files with:
-- Embedded CSS and JavaScript
-- DataTables for interactive filtering
+- Embedded CSS and JavaScript — no external requests, so a report opens with no
+  network and does not disclose who is reading it, or when
+- Sorting, search, grouping by domain and a status filter, all inline
 - Mobile-responsive design
 - No external dependencies
 

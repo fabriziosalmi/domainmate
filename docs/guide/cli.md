@@ -194,17 +194,21 @@ reports:
   output_dir: "reports"
 ```
 
-**Filename format:** `domainmate-report-YYYY-MM-DD-HHMMSS.html`
+Each run writes two files, overwriting the previous ones:
 
-**Example:** `reports/domainmate-report-2025-01-03-120000.html`
+| File | Contents |
+|---|---|
+| `index.html` | The report |
+| `report.json` | The same results as JSON |
 
 ### Report Features
 
-- **Self-contained HTML**: No external dependencies
-- **Interactive tables**: Sort, filter, search
-- **Mobile responsive**: Works on all devices
-- **Dark mode support**: Automatic theme detection
-- **Export options**: Print or save as PDF
+- **Self-contained HTML**: no external scripts or stylesheets, so the report
+  renders with no network and tells no third party who opened it
+- **Interactive tables**: sort by any column, search, group by domain, filter
+  by status
+- **Mobile responsive**: the table collapses to stacked cards on narrow screens
+- **Print friendly**: use the browser's print-to-PDF
 
 ## Exit Codes
 
