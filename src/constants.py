@@ -25,6 +25,14 @@ TIMEOUT_WEAK_PROTO = 2.0      # Weak-protocol probe (aggressive, intentional)
 TIMEOUT_HTTP = 10             # aiohttp client sessions
 TIMEOUT_CLI_HTTP = 15         # CLI heartbeat / api_url uploads
 
+# ── DNS records the dns monitor requires by default ─────────────────────────
+# Override via config.yaml: monitors.dns.required_records
+DEFAULT_REQUIRED_RECORDS = ["spf", "dmarc"]
+
+# Record names the dns monitor knows how to check. "dkim" is deliberately absent:
+# a DKIM lookup needs a selector, which the config does not carry.
+SUPPORTED_REQUIRED_RECORDS = frozenset({"spf", "dmarc", "mx", "caa"})
+
 # ── RBL magic return-code constants ─────────────────────────────────────────
 # Spamhaus/CBL: prefix returned when a public-DNS resolver blocks the DNSBL query
 RBL_BLOCKED_PREFIX = "127.255.255."

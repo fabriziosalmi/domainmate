@@ -1,9 +1,7 @@
-import yaml
 import asyncio
 import argparse
 import json
 import sys
-import os
 import aiohttp
 from urllib.parse import urlparse
 from loguru import logger
@@ -14,6 +12,7 @@ from src.monitors.security_monitor import SecurityMonitor
 from src.monitors.blacklist_monitor import BlacklistMonitor
 from src.notifications.service import NotificationService
 from src.reporting.html_generator import HTMLGenerator
+from src.config import load_config, monitor_config, monitor_enabled, report_setting
 import random
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -223,13 +222,10 @@ async def main() -> int:
         return compute_exit_code(all_results, args.fail_on)
 
     # Load Config
-    config_path = os.environ.get("DOMAINMATE_CONFIG_FILE", args.config)
     try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f)
-        logger.info(f"Loaded config from {config_path}")
+        config = load_config(args.config)
     except Exception as e:
-        logger.error(f"Failed to load config from {config_path}: {e}")
+        logger.error(f"Failed to load config: {e}")
         return EXIT_ERROR
 
     domains = config.get("domains", [])
@@ -237,15 +233,14 @@ async def main() -> int:
         logger.warning("No domains found in config.")
         return EXIT_OK
 
-    # Init Services
-    domain_monitor = DomainMonitor()
-    ssl_monitor = SSLMonitor()
-    dns_monitor = DNSMonitor()
-    security_monitor = SecurityMonitor()
-    blacklist_monitor = BlacklistMonitor()
+    # Init Services — each monitor reads its own monitors.<name> section
+    domain_monitor = DomainMonitor.from_config(monitor_config(config, "domain"))
+    ssl_monitor = SSLMonitor.from_config(monitor_config(config, "ssl"))
+    dns_monitor = DNSMonitor.from_config(monitor_config(config, "dns"))
+    security_monitor = SecurityMonitor.from_config(monitor_config(config, "security"))
+    blacklist_monitor = BlacklistMonitor.from_config(monitor_config(config, "blacklist"))
     notifier = NotificationService()
-    reporter = HTMLGenerator(output_dir=config.get("reports", {}).get("output_dir", "reports"))
-    monitors_cfg = config.get("monitors", {})
+    reporter = HTMLGenerator(output_dir=report_setting(config, "output_dir", "reports"))
 
     all_results = []
     
@@ -261,7 +256,7 @@ async def main() -> int:
         
         # We sequentially check for now to be gentle, could be async gathered
         # 1. Domain (WHOIS always uses root/parent)
-        if monitors_cfg.get("domain", {}).get("enabled", False):
+        if monitor_enabled(config, "domain"):
             try:
                 # Use parent domain for WHOIS to avoid "No whois server found for subdomain" errors
                 check_target = parent_domain
@@ -274,7 +269,7 @@ async def main() -> int:
                 logger.error(f"Domain monitor failed for {domain}: {e}")
 
         # 2. SSL (Use connectable host)
-        if monitors_cfg.get("ssl", {}).get("enabled", False):
+        if monitor_enabled(config, "ssl"):
             if connectable_host:
                 res = ssl_monitor.check_ssl(connectable_host)
                 if connectable_host != domain:
@@ -292,7 +287,7 @@ async def main() -> int:
                 })
         
         # 3. DNS (Always root/parent)
-        if monitors_cfg.get("dns", {}).get("enabled", False):
+        if monitor_enabled(config, "dns"):
             check_target = parent_domain
             res = dns_monitor.check_dns(check_target)
             res["domain"] = domain
@@ -301,7 +296,7 @@ async def main() -> int:
             all_results.append(res)
 
         # 4. Security (Use connectable host)
-        if monitors_cfg.get("security", {}).get("enabled", False):
+        if monitor_enabled(config, "security"):
             if connectable_host:
                 res = security_monitor.check_security(connectable_host)
                 if connectable_host != domain:
@@ -319,7 +314,7 @@ async def main() -> int:
                 })
 
         # 5. Blacklist (Always root/IP mainly)
-        if monitors_cfg.get("blacklist", {}).get("enabled", False):
+        if monitor_enabled(config, "blacklist"):
             res = blacklist_monitor.check_blacklist(domain)
             res["domain"] = domain
             all_results.append(res)

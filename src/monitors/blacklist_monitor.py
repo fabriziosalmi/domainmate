@@ -8,12 +8,17 @@ from src.constants import DEFAULT_RBLS, RBL_BLOCKED_PREFIX, RBL_PBL_IPS
 class BlacklistMonitor(BaseMonitor):
     monitor_name = "blacklist"
 
-    def __init__(self, rbls: list = None):
-        # Allow override from config; fall back to shared constant
-        self.rbls = rbls if rbls is not None else list(DEFAULT_RBLS)
+    def __init__(self, rbls: list = None, **kwargs):
+        super().__init__(**kwargs)
+        # Override from config.yaml: monitors.blacklist.rbls
+        self.rbls = list(rbls) if rbls else list(DEFAULT_RBLS)
         self.system_resolver = dns.resolver.Resolver()
         self.system_resolver.timeout = 2.0
         self.system_resolver.lifetime = 5.0
+
+    @classmethod
+    def from_config(cls, cfg: dict = None):
+        return cls(rbls=(cfg or {}).get("rbls"))
 
     def check_blacklist(self, domain: str) -> dict:
         """Resolve domain to IP and check against common RBLs."""
