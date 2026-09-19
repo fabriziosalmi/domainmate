@@ -9,6 +9,11 @@ action from operators; those are always called out under **Upgrading**.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-09-19
+
+The first release since `v0.4.1` in July. It collects the four batches of
+the quick-wins plan plus the ten commits that had accumulated on `main`.
+
 ### Added
 
 - Expiry is read over **RDAP** (RFC 9083) with WHOIS as the fallback. WHOIS
@@ -37,6 +42,19 @@ action from operators; those are always called out under **Upgrading**.
 - `SECURITY.md`, `CONTRIBUTING.md` and issue templates.
 - `ruff` and a coverage floor in CI; the test job now gates pull requests,
   which it did not before.
+- `--fail-on {never,warning,critical}` on the CLI. The exit code now reflects
+  what the scan found, so a pipeline can fail on findings instead of reporting
+  green regardless. Defaults to `never`, which keeps the previous behaviour.
+- `--json` on the CLI, writing the full result set to stdout while logs stay on
+  stderr, so the output pipes into `jq`.
+- `.github/dependabot.yml` — weekly updates for pip and GitHub Actions, monthly
+  for npm.
+- `.dockerignore`, cutting the build context from 46 tracked files plus the
+  whole git history down to 17.
+- AI-slop static analysis in CI (`slopless`), with findings uploaded to the
+  Security tab.
+- `sitemap.xml` generation for the VitePress documentation site.
+- This changelog.
 
 ### Changed
 
@@ -55,39 +73,6 @@ action from operators; those are always called out under **Upgrading**.
   rather than bundled — 418 KB against a 43 KB report — and replaced with
   inline vanilla JavaScript. The report makes no external requests, works
   offline, and grouping now keeps a domain in one block under any sort.
-
-### Fixed
-
-- `reports.retention_days` deleted the snapshot from the run in progress when
-  set to `0`.
-- A dead `socket` import, an unused local, and a block of leftover
-  brainstorming comments in `src/utils/dns_helpers.py`.
-- `zip()` calls that would have silently truncated had their inputs ever
-  diverged.
-
-## [0.5.0] — 2026-09-19
-
-The first release since `v0.4.1` in July. It collects ten commits that had
-accumulated on `main` plus a batch of CI and packaging work.
-
-### Added
-
-- `--fail-on {never,warning,critical}` on the CLI. The exit code now reflects
-  what the scan found, so a pipeline can fail on findings instead of reporting
-  green regardless. Defaults to `never`, which keeps the previous behaviour.
-- `--json` on the CLI, writing the full result set to stdout while logs stay on
-  stderr, so the output pipes into `jq`.
-- `.github/dependabot.yml` — weekly updates for pip and GitHub Actions, monthly
-  for npm.
-- `.dockerignore`, cutting the build context from 46 tracked files plus the
-  whole git history down to 17.
-- AI-slop static analysis in CI (`slopless`), with findings uploaded to the
-  Security tab.
-- `sitemap.xml` generation for the VitePress documentation site.
-- This changelog.
-
-### Changed
-
 - The container runs as an unprivileged user (UID/GID `10001`) instead of root.
   Application code stays root-owned and read-only to the runtime account.
 - Operational failures exit with `3` instead of `1`. Codes `1` and `2` now mean
@@ -108,6 +93,12 @@ accumulated on `main` plus a batch of CI and packaging work.
 
 ### Fixed
 
+- `reports.retention_days` deleted the snapshot from the run in progress when
+  set to `0`.
+- A dead `socket` import, an unused local, and a block of leftover
+  brainstorming comments in `src/utils/dns_helpers.py`.
+- `zip()` calls that would have silently truncated had their inputs ever
+  diverged.
 - `docs/guide/cli.md` documented exit code `1` twice and never mentioned the
   rest of the contract.
 
@@ -118,11 +109,9 @@ Two changes need action on existing deployments:
 - **Bind-mounted reports directory.** The container no longer runs as root, so
   a `reports/` directory mounted from the host has to be writable by UID
   `10001`:
-
   ```bash
   sudo chown -R 10001:10001 reports
   ```
-
 - **Configuration is no longer baked into the image.** Mount `config.yaml` at
   run time. `docker-compose.yml` and `make docker-run` already do this, so both
   documented paths keep working unchanged.
