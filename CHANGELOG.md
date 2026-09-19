@@ -26,6 +26,14 @@ action from operators; those are always called out under **Upgrading**.
 - `DOMAINMATE_API_KEY`: when set, `POST /analyze` and `POST /notify/test`
   require an `X-API-Key` header. Unset leaves them open, as before.
 - `monitors.dns.required_records` now also understands `mx` and `caa`.
+- A `domains` entry may carry a port (`mail.example.com:993`). Only the SSL
+  check uses it; every other monitor still gets the bare hostname. The port was
+  previously discarded twice over — `clean_domain()` stripped it, and
+  `SSLMonitor` took a `port` argument that `BaseMonitor.check()` never passed on.
+- The blacklist monitor checks **IPv6** addresses and **every** address a name
+  answers with, up to four, rather than reversing IPv4 octets on whichever one
+  the resolver happened to return first. An IPv6-only domain used to fail to
+  resolve outright.
 - `SECURITY.md`, `CONTRIBUTING.md` and issue templates.
 - `ruff` and a coverage floor in CI; the test job now gates pull requests,
   which it did not before.

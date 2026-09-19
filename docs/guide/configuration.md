@@ -177,6 +177,23 @@ a trend would be built from, it is an order of magnitude smaller, and
 `index.html` can be rendered from it. The snapshot from the run in progress is
 never pruned, whatever the retention is set to.
 
+## Ports
+
+A `domains` entry may carry a port:
+
+```yaml
+domains:
+  - example.com
+  - mail.example.com:993     # IMAP over TLS
+  - internal.example.com:8443
+```
+
+Only the SSL check uses it. WHOIS, the DNS records and the RBL lookups all
+want the hostname, and get it. Without a port the SSL check uses 443.
+
+A port that is not a number, or is outside 1-65535, is reported and ignored
+rather than failing the run.
+
 ## Unknown Keys
 
 Every key is checked against the settings the code actually reads. A key that

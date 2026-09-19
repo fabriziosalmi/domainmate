@@ -44,10 +44,16 @@ class BaseMonitor(ABC):
 
     # ── Public entry-point ────────────────────────────────────────────────────
 
-    def check(self, domain: str) -> dict:
-        """Run the monitor and guarantee a well-formed result dict."""
+    def check(self, domain: str, **kwargs) -> dict:
+        """
+        Run the monitor and guarantee a well-formed result dict.
+
+        Extra keyword arguments reach ``_run_check`` untouched, so a monitor
+        that takes more than a hostname — SSLMonitor's port, for instance —
+        actually receives it.
+        """
         try:
-            return self._run_check(domain)
+            return self._run_check(domain, **kwargs)
         except Exception as e:
             logger.error(f"Error in {self.monitor_name} monitor for {domain}: {e}")
             return self._error_result("Check failed")

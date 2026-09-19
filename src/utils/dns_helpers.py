@@ -90,13 +90,26 @@ class RobustResolver:
 
     def get_ip(self, domain: str) -> str:
         """
-        Simple helper to get a single IP (replacement for socket.gethostbyname).
+        Get a single address (replacement for socket.gethostbyname).
+        """
+        addresses = self.get_ips(domain, "A")
+        if not addresses:
+            raise Exception(f"Failed to resolve IP for {domain}: no A records found")
+        return addresses[0]
+
+    def get_ips(self, domain: str, rdtype: str = "A") -> list:
+        """
+        Every address of one type, in the order the resolver returned them.
+
+        A name behind a CDN or a load balancer has several; checking only the
+        first leaves the rest unexamined. Returns an empty list when the name
+        has no record of this type, which is an ordinary answer for a domain
+        that is v4-only or v6-only, not a failure.
         """
         try:
-            # Try 127.0.0.1 for localhost logic if needed, but assuming external scans
-            answers = self.resolve(domain, 'A')
-            for rdata in answers:
-                return rdata.to_text()
-            raise Exception("No A records found")
+            return [rdata.to_text() for rdata in self.resolve(domain, rdtype)]
+        except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
+            return []
         except Exception as e:
-            raise Exception(f"Failed to resolve IP for {domain}: {e}")
+            logger.debug(f"{rdtype} lookup failed for {domain}: {e}")
+            return []

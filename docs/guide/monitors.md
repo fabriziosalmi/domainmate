@@ -318,7 +318,23 @@ DomainMate checks for `Server` and `X-Powered-By` headers that reveal software v
 
 ### Purpose
 
-Checks the domain's resolved IP address against Real-time Blackhole Lists (RBLs).
+Checks the domain's resolved IP addresses against Real-time Blackhole Lists
+(RBLs).
+
+Both address families are checked: `A` records are queried as reversed octets
+(`1.2.3.4` becomes `4.3.2.1`), `AAAA` records as the 32 reversed hex nibbles
+that the DNSBL specifications use. An IPv4-mapped address is asked about in its
+IPv4 form, because that is what it is.
+
+A name that answers with several addresses has each of them checked, up to four
+— a name behind a CDN can return a dozen, and each one costs a query per RBL.
+The result reports `ips` with everything checked and `listings` with which RBL
+listed which address.
+
+Coverage for IPv6 varies by provider: several of the default RBLs are IPv4-only
+and answer NXDOMAIN for a v6 query, which reads as "not listed". An IPv6-only
+domain is now checked rather than failing to resolve, but treat a clean v6
+result as weaker evidence than a clean v4 one.
 
 ### Configuration
 
