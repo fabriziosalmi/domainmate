@@ -71,7 +71,7 @@ ROI = (impatto su affidabilità · fiducia · adozione) ÷ sforzo.
 | **7** | `encoding="utf-8"` esplicito (6 punti) | 15 min | Previene crash su locale non-UTF8 | ⭐⭐⭐⭐ |
 | **8** | RDAP prima di WHOIS | 3 h | Il guadagno di affidabilità più grande | ⭐⭐⭐⭐⭐ |
 | **9** | Scansione in parallelo | 2 h | Stimato 5–10× sul tempo di scansione | ⭐⭐⭐⭐ |
-| **10** | SECURITY.md, CONTRIBUTING.md, primo tag | 1 h | Riduce l'attrito all'adozione | ⭐⭐⭐⭐ |
+| **10** | SECURITY.md, CONTRIBUTING.md, CHANGELOG.md | 1 h | Riduce l'attrito all'adozione | ⭐⭐⭐⭐ |
 | **11** | Chiave API opzionale sull'endpoint `/analyze` | 1 h | Chiude un trigger di scansione aperto | ⭐⭐⭐ |
 | **12** | Storico dei report + `retention_days` | 2 h | Abilita i trend | ⭐⭐⭐ |
 | **13** | `ruff` + coverage in CI | 45 min | Qualità continua | ⭐⭐⭐ |
@@ -293,15 +293,25 @@ del tempo di scansione: **5–10×**.
 
 ---
 
-### #10 — Governance e primo rilascio · 1 h · rischio nullo
+### #10 — Governance e versionamento · 1 h · rischio nullo
 
-**Il problema.** Mancano `SECURITY.md` (su un tool di sicurezza), `CONTRIBUTING.md`,
-`CHANGELOG.md` e i template per le issue. E `git tag` è vuoto: il workflow di
-release è già cablato su `v*.*.*` ma **non è mai stato tagliato un rilascio**,
-quindi non esiste una versione citabile né un'immagine `ghcr.io` versionata.
+**Il problema.** Mancano `SECURITY.md` (su un tool di sicurezza),
+`CONTRIBUTING.md`, `CHANGELOG.md` e i template per le issue.
 
-**Il fix.** I quattro file più `git tag v1.0.0`. Il workflow esistente fa il resto
-da solo.
+Il versionamento invece esiste ma non è allineato. Tre release pubblicate
+(`v0.2.0`, `v0.4.0`, `v0.4.1`), e il workflow su `v*.*.*` funziona. Però:
+
+- `api/api.py` dichiara `version="0.4.0"` — non è mai stato bumpato per `v0.4.1`,
+  ed è servito pubblicamente su `GET /metrics`: chi interroga l'API legge una
+  versione sbagliata;
+- `package.json` dichiara `1.0.0`, che non corrisponde a nulla (è il pacchetto
+  npm della documentazione, ma sta nella root e confonde);
+- `main` ha **10 commit non rilasciati** dopo `v0.4.1`, senza un changelog che
+  dica cosa contengono.
+
+**Il fix.** I quattro file mancanti, più una sola fonte di verità per la versione
+(la stringa in `api/api.py` allineata al tag) e un `CHANGELOG.md` che renda le
+note di rilascio qualcosa di più di un elenco di PR.
 
 ---
 
@@ -341,7 +351,7 @@ fosse previsto fin dall'inizio.
 | Tasso di successo del monitor dominio in container | fallisce in 10 s | RDAP su 443 |
 | Dipendenze non pinnate | 14 | 0 |
 | Il container gira come root | sì | no |
-| Release taggate | 0 | v1.0.0 |
+| Versione in `api/api.py` vs ultimo tag | 0.4.0 vs v0.4.1 | allineate |
 
 ---
 
