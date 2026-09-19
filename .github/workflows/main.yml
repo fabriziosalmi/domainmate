@@ -77,7 +77,10 @@ jobs:
           TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
         run: python src/cli.py --notify
 
+      # always(): a future --fail-on would otherwise skip this step and lose
+      # the report that explains why the audit failed.
       - name: Upload report artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: domainmate-report

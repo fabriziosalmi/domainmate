@@ -18,7 +18,7 @@ class NotificationManager:
         if os.path.exists(self.state_file):
             try:
                 with self._lock:
-                    with open(self.state_file, "r") as f:
+                    with open(self.state_file, "r", encoding="utf-8") as f:
                         return json.load(f)
             except Exception as e:
                 logger.error(f"Failed to load notification state: {e}")
@@ -28,8 +28,8 @@ class NotificationManager:
         try:
             os.makedirs(os.path.dirname(self.state_file), exist_ok=True)
             with self._lock:
-                with open(self.state_file, "w") as f:
-                    json.dump(self.state, f, indent=2, default=str)
+                with open(self.state_file, "w", encoding="utf-8") as f:
+                    json.dump(self.state, f, indent=2, default=str, ensure_ascii=False)
         except Exception as e:
             logger.error(f"Failed to save notification state: {e}")
 

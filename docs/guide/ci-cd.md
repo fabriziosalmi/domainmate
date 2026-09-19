@@ -50,6 +50,40 @@ jobs:
           retention-days: 30
 ```
 
+### Failing the Build on Findings
+
+By default a completed scan exits `0` whatever it found, so the job above stays
+green even when a certificate has expired. Add `--fail-on` to gate on the
+result:
+
+```yaml
+      - name: Run DomainMate
+        env:
+          PYTHONPATH: .
+        run: python src/cli.py --notify --fail-on critical
+
+      - name: Upload Report
+        if: always()          # keep the report even when the audit fails
+        uses: actions/upload-artifact@v4
+        with:
+          name: domainmate-report
+          path: reports/
+```
+
+`if: always()` matters here: without it a failing audit skips the upload and you
+lose the report that explains *why* it failed.
+
+Pick the level that matches how you want to be interrupted:
+
+- `--fail-on critical` — red only for expired certificates, blacklisted IPs and
+  unreachable hosts. A reasonable default for a scheduled audit.
+- `--fail-on warning` — also red for anything expiring soon or missing an SPF or
+  DMARC record. Better suited to a pre-deploy gate than a nightly run.
+
+Exit code `3` is reserved for "could not run" (unreadable config, invalid
+arguments), so a broken pipeline stays distinguishable from a genuine finding.
+
+
 ### Schedule Configuration
 
 **Cron Syntax:**

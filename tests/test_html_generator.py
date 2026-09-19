@@ -21,20 +21,20 @@ def _generate(tmp_path):
 def test_generates_html_and_json(tmp_path):
     output_file, reports_dir = _generate(tmp_path)
     assert (reports_dir / "index.html").exists()
-    data = json.loads((reports_dir / "report.json").read_text())
+    data = json.loads((reports_dir / "report.json").read_text(encoding="utf-8"))
     assert len(data) == len(SAMPLE)
 
 
 def test_expired_cert_rendered_without_negative_days(tmp_path):
     _, reports_dir = _generate(tmp_path)
-    html = (reports_dir / "index.html").read_text()
+    html = (reports_dir / "index.html").read_text(encoding="utf-8")
     assert "Expired 12 days ago" in html
     assert "-12 days remaining" not in html
 
 
 def test_status_filter_and_footer_present(tmp_path):
     _, reports_dir = _generate(tmp_path)
-    html = (reports_dir / "index.html").read_text()
+    html = (reports_dir / "index.html").read_text(encoding="utf-8")
     assert 'id="statusFilter"' in html
     assert "github.com/fabriziosalmi/domainmate" in html
 

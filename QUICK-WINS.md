@@ -5,6 +5,27 @@
 
 ---
 
+## 0. Stato
+
+**Lotto 0 completato** (#1, #2, #6, #7). Il resto del piano è invariato.
+
+| # | Quick win | Stato |
+|---|---|---|
+| 1 | Exit code per la CI | ✅ `--fail-on` + `--json`, 21 test nuovi |
+| 2 | Pinning dipendenze | ✅ 14 pin `==` + Dependabot (pip, actions, npm) |
+| 6 | Docker non-root | ✅ UID/GID 10001 + `.dockerignore` (46 → 17 file nel contesto) |
+| 7 | encoding esplicito | ✅ 6 `open()` + `ensure_ascii=False` sui dump JSON |
+
+Due note sul Lotto 0:
+
+- Il contenitore ora gira come UID 10001, quindi una `reports/` montata da host
+  va resa scrivibile: `sudo chown -R 10001:10001 reports`.
+- `config.yaml` non finisce più nell'immagine (contiene la lista domini, che
+  verrebbe distribuita a ogni pull). Va montato a runtime — `docker-compose.yml`
+  e `make docker-run` lo fanno già.
+
+---
+
 ## 1. Lo scope, in breve
 
 | Dimensione | Stato |
@@ -96,9 +117,11 @@ esce **sempre con 0**, anche con certificati scaduti e domini in blacklist.
 primario. Oggi nessuna pipeline può fallire su un finding: l'audit gira, trova
 problemi critici, e la build resta verde.
 
-**Il fix.** Aggiungere `--fail-on {never,warning,critical}` (default `never`, per
-non rompere chi c'è già) con uscita `0` / `1` / `2`. In più `--json` su stdout per
-consentire il piping verso `jq`.
+**Il fix — fatto.** `--fail-on {never,warning,critical}` (default `never`, per non
+rompere chi c'è già) con uscita `0` / `1` / `2`, e `3` riservato a «non ho potuto
+eseguire» (config illeggibile, argomenti errati) — anche per gli errori di usage
+di argparse, che altrimenti uscirebbero con `2` come i finding critici. Più
+`--json` su stdout per il piping verso `jq`.
 
 ---
 
