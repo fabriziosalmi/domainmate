@@ -99,7 +99,7 @@ async def scan_domain(raw_domain: str, monitors: dict, config: dict,
     )
 
     by_name = {}
-    for (name, _, _, prefix), output in zip(planned, outputs):
+    for (name, _, _, prefix), output in zip(planned, outputs, strict=True):
         if isinstance(output, Exception):
             # BaseMonitor.check() already turns failures into error results, so
             # reaching here means something outside it broke.
@@ -133,7 +133,7 @@ async def scan_all(domains: list, monitors: dict, config: dict,
     )
 
     results = []
-    for raw_domain, output in zip(domains, per_domain):
+    for raw_domain, output in zip(domains, per_domain, strict=True):
         if isinstance(output, Exception):
             logger.error(f"Scan failed for {raw_domain}: {output}")
             continue

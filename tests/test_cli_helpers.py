@@ -1,4 +1,9 @@
-from src.cli import clean_domain, get_parent_domain, get_demo_data
+import json
+
+import pytest
+
+from src.cli import _ArgumentParser, clean_domain, compute_exit_code, emit_json, get_demo_data, get_parent_domain
+from src.constants import EXIT_CRITICAL, EXIT_ERROR, EXIT_OK, EXIT_WARNING
 
 
 def test_clean_domain_strips_protocol_and_path():
@@ -38,11 +43,8 @@ def test_demo_data_shape():
 
 # ── Exit-code contract (--fail-on) ───────────────────────────────────────────
 
-import json
-import pytest
 
-from src.cli import _ArgumentParser, compute_exit_code, emit_json
-from src.constants import EXIT_OK, EXIT_WARNING, EXIT_CRITICAL, EXIT_ERROR
+
 
 
 def _r(status):

@@ -1,10 +1,13 @@
 import dns.resolver
 from loguru import logger
-from src.monitors.base_monitor import BaseMonitor
+
 from src.constants import (
-    DEFAULT_REQUIRED_RECORDS, SUPPORTED_REQUIRED_RECORDS,
-    STATUS_OK, STATUS_WARNING,
+    DEFAULT_REQUIRED_RECORDS,
+    STATUS_OK,
+    STATUS_WARNING,
+    SUPPORTED_REQUIRED_RECORDS,
 )
+from src.monitors.base_monitor import BaseMonitor
 
 
 class DNSMonitor(BaseMonitor):

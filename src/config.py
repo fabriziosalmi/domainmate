@@ -48,7 +48,7 @@ def load_config(path: Optional[str] = None) -> dict:
     callers decide whether that is fatal.
     """
     resolved = config_path(path)
-    with open(resolved, "r", encoding="utf-8") as f:
+    with open(resolved, encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
     if config is None:

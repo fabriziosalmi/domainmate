@@ -168,12 +168,14 @@ reports:
   retention_days: 30         # Days to keep old reports (cleanup)
 ```
 
-::: warning
-`retention_days` is not implemented yet. Every run overwrites the same
-`index.html` and `report.json`, so there is no report history to prune. The key
-is accepted without a warning so the setting survives, and it starts taking
-effect once reports are kept per run.
-:::
+Each run writes `index.html` and `report.json` describing the latest scan, plus
+a timestamped `report-YYYYMMDD-HHMMSS.json` snapshot. `retention_days` deletes
+snapshots older than that many days; leave it unset to keep every one.
+
+Only the JSON is kept per run, not the HTML: it is the machine-readable record
+a trend would be built from, it is an order of magnitude smaller, and
+`index.html` can be rendered from it. The snapshot from the run in progress is
+never pruned, whatever the retention is set to.
 
 ## Unknown Keys
 

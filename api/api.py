@@ -1,25 +1,55 @@
 import asyncio
+import os
 import re
+import secrets
 from datetime import datetime, timezone
 from typing import Literal
 
-from fastapi import FastAPI, BackgroundTasks, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, status
 from loguru import logger
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
 from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
-from src.monitors.domain_monitor import DomainMonitor
-from src.monitors.ssl_monitor import SSLMonitor
-from src.monitors.dns_monitor import DNSMonitor
-from src.monitors.security_monitor import SecurityMonitor
-from src.monitors.blacklist_monitor import BlacklistMonitor
-from src.notifications.service import NotificationService
 from src.config import load_config, monitor_config
+from src.monitors.blacklist_monitor import BlacklistMonitor
+from src.monitors.dns_monitor import DNSMonitor
+from src.monitors.domain_monitor import DomainMonitor
+from src.monitors.security_monitor import SecurityMonitor
+from src.monitors.ssl_monitor import SSLMonitor
+from src.notifications.service import NotificationService
 
 limiter = Limiter(key_func=get_remote_address)
+
+# ── Optional API key ──────────────────────────────────────────────────────────
+# POST /analyze makes this host run WHOIS, TLS and HTTP probes against whatever
+# domain the caller names. docker-compose.yml binds the port to 127.0.0.1, but
+# the Dockerfile's default CMD listens on 0.0.0.0, so anyone following the
+# README can publish it. Setting DOMAINMATE_API_KEY requires the header;
+# leaving it unset keeps the previous behaviour exactly.
+API_KEY = os.environ.get("DOMAINMATE_API_KEY") or None
+API_KEY_HEADER = "X-API-Key"
+
+if API_KEY:
+    logger.info(f"API key required on write endpoints (header: {API_KEY_HEADER})")
+else:
+    logger.warning(
+        "DOMAINMATE_API_KEY is not set: /analyze and /notify/test are open to "
+        "anyone who can reach this port"
+    )
+
+
+def require_api_key(x_api_key: str = Header(default=None, alias=API_KEY_HEADER)):
+    """No key configured means no check, so existing deployments keep working."""
+    if not API_KEY:
+        return
+    # compare_digest keeps the comparison time-independent of how much matched
+    if not x_api_key or not secrets.compare_digest(x_api_key, API_KEY):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"A valid {API_KEY_HEADER} header is required",
+        )
 
 app = FastAPI(title="DomainMate API", version="0.5.0")
 app.state.limiter = limiter
@@ -79,7 +109,7 @@ class TestNotificationRequest(BaseModel):
     message: str
     level: Literal["info", "warning", "critical"] = "info"
 
-@app.post("/analyze")
+@app.post("/analyze", dependencies=[Depends(require_api_key)])
 @limiter.limit("10/minute")
 async def analyze_domain(request: Request, req: AnalyzeRequest, background_tasks: BackgroundTasks):
     """
@@ -103,12 +133,15 @@ async def analyze_domain(request: Request, req: AnalyzeRequest, background_tasks
     outputs = await asyncio.gather(
         *(asyncio.to_thread(func, req.domain) for _, func in checks)
     )
-    results = {name: output for (name, _), output in zip(checks, outputs)}
+    results = {name: output for (name, _), output in zip(checks, outputs, strict=True)}
 
     issues = []
     for monitor_name, res in results.items():
         if res.get("status") in ["critical", "error"]:
-            issues.append(f"[{monitor_name.upper()}] Status: {res.get('status')} - {res.get('message', 'Check details')}")
+            issues.append(
+                f"[{monitor_name.upper()}] Status: {res.get('status')} - "
+                f"{res.get('message', 'Check details')}"
+            )
         elif res.get("status") == "warning":
             issues.append(f"[{monitor_name.upper()}] Warning: {res.get('message', 'Expiring soon or missing config')}")
 
@@ -127,7 +160,7 @@ async def analyze_domain(request: Request, req: AnalyzeRequest, background_tasks
         "issues_found": len(issues)
     }
 
-@app.post("/notify/test")
+@app.post("/notify/test", dependencies=[Depends(require_api_key)])
 @limiter.limit("5/minute")
 async def test_notification(request: Request, req: TestNotificationRequest, background_tasks: BackgroundTasks):
     """
@@ -139,8 +172,11 @@ async def test_notification(request: Request, req: TestNotificationRequest, back
 
 @app.get("/metrics")
 def get_metrics():
+    # Deliberately unauthenticated: the container HEALTHCHECK calls it, and it
+    # discloses nothing about the monitored domains.
     return {
         "status": "healthy",
         "monitors_active": 5,
-        "version": app.version
+        "version": app.version,
+        "auth_required": bool(API_KEY),
     }

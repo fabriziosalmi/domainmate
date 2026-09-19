@@ -1,5 +1,6 @@
-import whois
 from datetime import datetime, timezone
+
+import whois
 from loguru import logger
 
 from src.monitors import rdap

@@ -1,12 +1,20 @@
+import glob
 import json
 import os
+import re
 import shutil
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from loguru import logger
 
 TEMPLATE_NAME = "report.html"
+
+#: One JSON snapshot per run, so a scan can be compared against earlier ones.
+#: index.html and report.json always describe the latest run.
+HISTORY_PREFIX = "report-"
+HISTORY_STAMP = "%Y%m%d-%H%M%S"
+_HISTORY_RE = re.compile(r"^report-(\d{8}-\d{6})\.json$")
 
 #: The template shipped with the package. It is a real file rather than a
 #: string literal so it can be reviewed in a diff and edited in place.
@@ -14,9 +22,12 @@ PACKAGED_TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)),
 
 
 class HTMLGenerator:
-    def __init__(self, template_dir: str = None, output_dir: str = "reports"):
+    def __init__(self, template_dir: str = None, output_dir: str = "reports",
+                 retention_days: int = None):
         self.output_dir = output_dir
         self.template_dir = template_dir or PACKAGED_TEMPLATE_DIR
+        # From config.yaml: reports.retention_days. None keeps every snapshot.
+        self.retention_days = retention_days
         os.makedirs(output_dir, exist_ok=True)
         self._ensure_template()
         self.env = Environment(
@@ -86,4 +97,73 @@ class HTMLGenerator:
         with open(json_file, "w", encoding="utf-8") as f:
             json.dump(results, f, indent=2, default=str, ensure_ascii=False)
 
+        snapshot = self._write_snapshot(results, now_utc)
+        # The run that is happening now is never what retention is about.
+        self.prune_history(now_utc, keep={snapshot})
+
         return output_file
+
+    # ── History ───────────────────────────────────────────────────────────────
+
+    def _write_snapshot(self, results: list, when: datetime) -> str:
+        """
+        Keep one JSON file per run. Only the JSON is kept, not the HTML: it is
+        the machine-readable record a trend would be built from, it is an
+        order of magnitude smaller, and index.html can be rendered from it.
+        """
+        name = f"{HISTORY_PREFIX}{when.strftime(HISTORY_STAMP)}.json"
+        path = os.path.join(self.output_dir, name)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(results, f, indent=2, default=str, ensure_ascii=False)
+        return path
+
+    def prune_history(self, now: datetime = None, keep: set = None) -> list:
+        """
+        Delete snapshots older than ``retention_days`` and return what went.
+
+        Returns early when retention is unset, so the default is to keep
+        everything rather than silently start deleting a user's history.
+        Paths in ``keep`` are never removed.
+        """
+        if self.retention_days is None:
+            return []
+        if not isinstance(self.retention_days, int) or self.retention_days < 0:
+            logger.warning(
+                f"reports.retention_days must be a non-negative whole number, "
+                f"got {self.retention_days!r}; keeping every snapshot"
+            )
+            return []
+
+        now = now or datetime.now(timezone.utc)
+        # Snapshot names carry whole seconds, so the cutoff has to as well:
+        # otherwise the microseconds on `now` make a file stamped this very
+        # second look older than the cutoff.
+        cutoff = now.replace(microsecond=0) - timedelta(days=self.retention_days)
+        protected = {os.path.abspath(p) for p in (keep or set())}
+        removed = []
+
+        for path in glob.glob(os.path.join(self.output_dir, f"{HISTORY_PREFIX}*.json")):
+            if os.path.abspath(path) in protected:
+                continue
+            match = _HISTORY_RE.match(os.path.basename(path))
+            if not match:
+                continue  # not one of ours; leave it alone
+            try:
+                stamped = datetime.strptime(match.group(1), HISTORY_STAMP).replace(
+                    tzinfo=timezone.utc
+                )
+            except ValueError:
+                continue
+            if stamped < cutoff:
+                try:
+                    os.remove(path)
+                    removed.append(path)
+                except OSError as e:
+                    logger.warning(f"Could not remove old snapshot {path}: {e}")
+
+        if removed:
+            logger.info(
+                f"Removed {len(removed)} snapshot(s) older than "
+                f"{self.retention_days} day(s)"
+            )
+        return removed

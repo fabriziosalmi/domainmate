@@ -9,6 +9,54 @@ action from operators; those are always called out under **Upgrading**.
 
 ## [Unreleased]
 
+### Added
+
+- Expiry is read over **RDAP** (RFC 9083) with WHOIS as the fallback. WHOIS
+  speaks a line protocol on port 43, which is blocked in most containers and CI
+  runners; measured in one, the domain monitor took 10 seconds to fail while
+  every other check finished in under a quarter of a second. Each result records
+  which path answered, and `monitors.domain.use_rdap` turns RDAP off.
+- Checks run **concurrently** instead of one after another — 7 domains x 5
+  monitors used to be 35 blocking network calls in series. `--concurrency`
+  (default 8) bounds how many run at once. Measured at roughly 5.8x on a
+  seven-domain config.
+- `--concurrency`, `--fail-on` and `--json` on the CLI.
+- Each run keeps a timestamped `report-YYYYMMDD-HHMMSS.json` snapshot, pruned
+  by `reports.retention_days`.
+- `DOMAINMATE_API_KEY`: when set, `POST /analyze` and `POST /notify/test`
+  require an `X-API-Key` header. Unset leaves them open, as before.
+- `monitors.dns.required_records` now also understands `mx` and `caa`.
+- `SECURITY.md`, `CONTRIBUTING.md` and issue templates.
+- `ruff` and a coverage floor in CI; the test job now gates pull requests,
+  which it did not before.
+
+### Changed
+
+- **Six documented configuration keys are now read.** The expiry thresholds for
+  domain and SSL, `required_records` and `rbls` were documented in the README,
+  `config.yaml` and the docs while no code looked at them: the file parsed
+  without error and nothing changed. The API did not read the configuration at
+  all, so a threshold tuned in `config.yaml` applied to the CLI and not to
+  `/analyze`. Unknown keys are now reported by path instead of dropped.
+- **The report template is no longer overwritten.** `HTMLGenerator` rewrote
+  `src/templates/report.html` on every run, destroying any customisation
+  without a word. It is now written only when missing.
+- **The report is genuinely self-contained.** Three places in the
+  documentation said so while the template pulled seven files from three CDNs
+  with no integrity hashes. jQuery, DataTables and Bootstrap were removed
+  rather than bundled — 418 KB against a 43 KB report — and replaced with
+  inline vanilla JavaScript. The report makes no external requests, works
+  offline, and grouping now keeps a domain in one block under any sort.
+
+### Fixed
+
+- `reports.retention_days` deleted the snapshot from the run in progress when
+  set to `0`.
+- A dead `socket` import, an unused local, and a block of leftover
+  brainstorming comments in `src/utils/dns_helpers.py`.
+- `zip()` calls that would have silently truncated had their inputs ever
+  diverged.
+
 ## [0.5.0] — 2026-09-19
 
 The first release since `v0.4.1` in July. It collects ten commits that had

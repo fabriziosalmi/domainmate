@@ -2,6 +2,41 @@
 
 DomainMate includes a FastAPI-based REST API for programmatic access to monitoring capabilities.
 
+## Authentication
+
+`POST /analyze` makes this host run WHOIS, TLS and HTTP probes against whatever
+domain the caller names. `docker-compose.yml` binds the port to `127.0.0.1`,
+but the Dockerfile's default command listens on `0.0.0.0`, so anyone following
+the README can publish it.
+
+Set `DOMAINMATE_API_KEY` to require a header on the write endpoints:
+
+```bash
+export DOMAINMATE_API_KEY="$(openssl rand -hex 32)"
+```
+
+```bash
+curl -X POST http://localhost:8000/analyze \
+  -H "X-API-Key: $DOMAINMATE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"domain": "example.com"}'
+```
+
+Without the header, or with the wrong value, the request is rejected with
+`401`. Leaving the variable unset keeps both endpoints open exactly as before,
+and logs a warning at startup saying so.
+
+`GET /metrics` stays unauthenticated: the container healthcheck calls it, and it
+discloses nothing about the monitored domains. It does report whether the key is
+in force:
+
+```json
+{ "status": "healthy", "monitors_active": 5, "version": "0.5.0", "auth_required": true }
+```
+
+Rate limiting applies either way: 10 requests a minute per IP on `/analyze`,
+5 on `/notify/test`.
+
 ## Overview
 
 The API allows you to:

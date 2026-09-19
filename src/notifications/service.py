@@ -1,32 +1,35 @@
-import aiohttp
 import smtplib
-from email.message import EmailMessage
 from datetime import datetime, timezone
+from email.message import EmailMessage
 from typing import Optional
 from urllib.parse import urlparse
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from github import Github
+
+import aiohttp
 import gitlab
+from github import Github
 from loguru import logger
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 from src.constants import TIMEOUT_HTTP
+
 
 class NotificationSettings(BaseSettings):
     # GitHub
     GITHUB_TOKEN: Optional[str] = None
     GITHUB_REPO: Optional[str] = None # user/repo
-    
+
     # GitLab
     GITLAB_URL: str = "https://gitlab.com"
     GITLAB_TOKEN: Optional[str] = None
     GITLAB_PROJECT_ID: Optional[str] = None
-    
+
     # Telegram
     TELEGRAM_BOT_TOKEN: Optional[str] = None
     TELEGRAM_CHAT_ID: Optional[str] = None
-    
+
     # Teams
     TEAMS_WEBHOOK_URL: Optional[str] = None
-    
+
     # Email
     EMAIL_SMTP_SERVER: Optional[str] = None
     EMAIL_SMTP_PORT: int = 587
@@ -73,7 +76,7 @@ class NotificationService:
         Priority: Env Vars (settings) > Config YAML > None
         """
         self.config = config or {}
-        
+
     def _get_config_value(self, channel: str, key: str, env_value: Optional[str] = None) -> Optional[str]:
         """
         Retrieve a config value, preferring env var over YAML config.
@@ -85,7 +88,7 @@ class NotificationService:
         Send notification to all configured channels.
         """
         logger.info(f"Sending notification: {title} [{level}]")
-        
+
         await self._send_github_issue(title, message, level)
         await self._send_gitlab_issue(title, message, level)
         await self._send_telegram(title, message)
@@ -96,10 +99,10 @@ class NotificationService:
     async def _send_github_issue(self, title: str, body: str, level: str):
         token = self._get_config_value("github", "token", settings.GITHUB_TOKEN)
         repo_name = self._get_config_value("github", "repo", settings.GITHUB_REPO)
-        
+
         if not (token and repo_name and level == "critical"):
             return
-            
+
         try:
             g = Github(token)
             repo = g.get_repo(repo_name)
@@ -111,10 +114,10 @@ class NotificationService:
     async def _send_gitlab_issue(self, title: str, body: str, level: str):
         token = self._get_config_value("gitlab", "token", settings.GITLAB_TOKEN)
         pid = self._get_config_value("gitlab", "project_id", settings.GITLAB_PROJECT_ID)
-        
+
         if not (token and pid and level == "critical"):
             return
-            
+
         try:
             gl = gitlab.Gitlab(settings.GITLAB_URL, private_token=token)
             project = gl.projects.get(pid)
@@ -126,10 +129,10 @@ class NotificationService:
     async def _send_telegram(self, title: str, message: str):
         token = self._get_config_value("telegram", "bot_token", settings.TELEGRAM_BOT_TOKEN)
         chat_id = self._get_config_value("telegram", "chat_id", settings.TELEGRAM_CHAT_ID)
-        
+
         if not (token and chat_id):
             return
-            
+
         try:
             url = f"https://api.telegram.org/bot{token}/sendMessage"
             payload = {
@@ -179,10 +182,10 @@ class NotificationService:
     async def _send_email(self, title: str, body: str):
         srv = settings.EMAIL_SMTP_SERVER
         to = settings.EMAIL_TO
-        
+
         if not (srv and to):
             return
-            
+
         try:
             msg = EmailMessage()
             msg.set_content(body)

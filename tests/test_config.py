@@ -9,15 +9,18 @@ import textwrap
 import pytest
 
 from src.config import (
-    config_path, load_config, monitor_config, monitor_enabled,
-    report_setting, validate_config,
+    config_path,
+    load_config,
+    monitor_config,
+    monitor_enabled,
+    report_setting,
+    validate_config,
 )
-from src.constants import EXPIRY_WARNING_DAYS, EXPIRY_CRITICAL_DAYS, DEFAULT_RBLS
+from src.constants import DEFAULT_RBLS, EXPIRY_CRITICAL_DAYS, EXPIRY_WARNING_DAYS
 from src.monitors.blacklist_monitor import BlacklistMonitor
 from src.monitors.dns_monitor import DNSMonitor
 from src.monitors.domain_monitor import DomainMonitor
 from src.monitors.ssl_monitor import SSLMonitor
-
 
 FULL = textwrap.dedent("""
     domains:
