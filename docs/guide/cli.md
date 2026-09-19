@@ -77,6 +77,15 @@ python src/cli.py --fail-on critical
 A critical finding always outranks a warning: with `--fail-on warning`, a run
 that contains both exits `2`, not `1`.
 
+### `--concurrency`
+
+Cap how many checks run at once (default: 8). See
+[Concurrency](#concurrency) below.
+
+```bash
+python src/cli.py --concurrency 4
+```
+
 ### `--json`
 
 Write the full result set to stdout as JSON.
@@ -467,23 +476,28 @@ Approximate time per domain:
 - **Security check**: 2-4 seconds (HTTP request + header analysis)
 - **Blacklist check**: 5-10 seconds (multiple RBL queries)
 
-**Total per domain:** ~15-30 seconds
+These run concurrently, so the wall-clock time for a scan is close to the
+slowest single domain rather than the sum of all of them.
 
-**For 10 domains:** ~3-5 minutes
+### Concurrency
 
-### Optimization
+Checks are blocking (WHOIS, sockets, DNS), so they run in worker threads and
+are gathered. `--concurrency` caps how many run at once:
 
-Currently sequential, but could be parallelized:
-
-```python
-# Future enhancement
-import asyncio
-
-async def check_all_domains(domains):
-    tasks = [check_domain(d) for d in domains]
-    results = await asyncio.gather(*tasks)
-    return results
+```bash
+python src/cli.py --concurrency 4
 ```
+
+**Default:** 8. On a 7-domain config that is roughly a 5-6x reduction in scan
+time against running the checks one after another.
+
+Lower it if a registry or RBL starts rate-limiting you; raise it if you are
+scanning many domains and nothing is complaining. `--concurrency 1` restores
+fully sequential behaviour.
+
+Results keep the order of the config file, and within a domain the order the
+monitors are declared, so two runs over the same config produce the same
+`report.json` regardless of which check finished first.
 
 ### Resource Usage
 

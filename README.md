@@ -17,7 +17,7 @@ DomainMate is a domain and security monitoring tool. It checks WHOIS expiration 
 
 ## Overview
 
-DomainMate checks each configured domain sequentially across five monitors:
+DomainMate checks each configured domain across five monitors, run concurrently:
 
 *   **Domain Validity**: WHOIS expiration tracking with parent domain detection for subdomains.
 *   **SSL/TLS**: Certificate expiration date and basic protocol check (TLS 1.0/1.1 detection where supported by the local OpenSSL build).
@@ -27,7 +27,9 @@ DomainMate checks each configured domain sequentially across five monitors:
 
 ## Architecture
 
-DomainMate is built on Python 3.12. Checks run sequentially per domain.
+DomainMate is built on Python 3.12. Checks are blocking (WHOIS, sockets, DNS),
+so they run in worker threads and are gathered concurrently, bounded by
+`--concurrency` (default 8).
 
 *   **DNS Layer**: Custom `RobustResolver` tries a pool of public DNS servers (Cloudflare, Google, Quad9, OpenDNS) and falls back to DNS-over-HTTPS (Cloudflare) if all fail.
 *   **Reporting**: Generates static, self-contained HTML reports. Sorting, search,

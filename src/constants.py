@@ -33,6 +33,12 @@ DEFAULT_REQUIRED_RECORDS = ["spf", "dmarc"]
 # a DKIM lookup needs a selector, which the config does not carry.
 SUPPORTED_REQUIRED_RECORDS = frozenset({"spf", "dmarc", "mx", "caa"})
 
+# ── Scan concurrency ────────────────────────────────────────────────────────
+# Checks are network-bound, so they run in parallel; the cap keeps a long
+# domain list from hammering registries and RBL servers. Override with
+# --concurrency.
+DEFAULT_CONCURRENCY = 8
+
 # ── RBL magic return-code constants ─────────────────────────────────────────
 # Spamhaus/CBL: prefix returned when a public-DNS resolver blocks the DNSBL query
 RBL_BLOCKED_PREFIX = "127.255.255."
