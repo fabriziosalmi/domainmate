@@ -1,9 +1,11 @@
-import requests
 import socket
 import ssl
+
+import requests
 from loguru import logger
-from src.monitors.base_monitor import BaseMonitor
+
 from src.constants import TIMEOUT_SOCKET, TIMEOUT_WEAK_PROTO
+from src.monitors.base_monitor import BaseMonitor
 
 
 class SecurityMonitor(BaseMonitor):
@@ -51,7 +53,7 @@ class SecurityMonitor(BaseMonitor):
                 issues.append(s)
                 checks["weak_protocols"] = weak_protocols
 
-            from src.constants import STATUS_OK, STATUS_WARNING, STATUS_CRITICAL
+            from src.constants import STATUS_CRITICAL, STATUS_OK, STATUS_WARNING
             if weak_protocols:
                 status_val = STATUS_CRITICAL
             elif issues:

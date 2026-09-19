@@ -1,8 +1,8 @@
 import dns.resolver
-import socket
 from loguru import logger
-from src.monitors.base_monitor import BaseMonitor
+
 from src.constants import DEFAULT_RBLS, RBL_BLOCKED_PREFIX, RBL_PBL_IPS
+from src.monitors.base_monitor import BaseMonitor
 
 
 class BlacklistMonitor(BaseMonitor):

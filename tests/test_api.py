@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from api.api import AnalyzeRequest, get_metrics, app
+from api.api import AnalyzeRequest, app, get_metrics
 
 
 def test_valid_domain_normalized():

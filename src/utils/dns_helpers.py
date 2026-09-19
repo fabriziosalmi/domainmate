@@ -1,8 +1,10 @@
-import dns.resolver
+import random
+
 import dns.rdatatype
+import dns.resolver
 import requests
 from loguru import logger
-import random
+
 
 class RobustResolver:
     """
@@ -32,31 +34,19 @@ class RobustResolver:
         resolver.timeout = self.timeout
         resolver.lifetime = self.total_timeout
 
-        last_exception = None
-
-        # Strategy: Try chunks of resolvers or just iterate? 
-        # Iterating through ALL might be slow if timeout is high. 
-        # Let's try up to 3 different sets of nameservers.
-        
-        # We can just set the nameservers to our full list? 
-        # Standard dns.resolver uses the list in order/round-robin. 
-        # But if we want *specific* fallback explicitly (e.g. if Google fails, try Cloudflare),
-        # we can just populate the default resolver with our robust list.
-        
+        # dnspython rotates through the whole list itself, so handing it every
+        # resolver at once is the fallback.
         resolver.nameservers = current_resolvers
 
         try:
-             # This will use the configured nameservers with the built-in logic of dnspython
-             return resolver.resolve(qname, rdtype)
-        except Exception as e:
-            # If the "batch" failed, maybe valid NXDOMAIN or NoAnswer?
-            # If NXDOMAIN, that's authoritative (usually).
-            if isinstance(e, (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer)):
-                raise e
-            
-            # If Timeout, we might want to try one last desperate attempt with system default?
-            # Or just raise. With 8+ resolvers, if all fail, it's likely down or network issue.
-            # Fallback to DoH (DNS over HTTPS) - Firewall piercing
+            return resolver.resolve(qname, rdtype)
+        except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
+            # Authoritative answers: the name genuinely has no such record, and
+            # asking over another transport would not change that.
+            raise
+        except Exception:
+            # Every resolver failed to answer at all. That usually means UDP/53
+            # is blocked rather than that the name is gone, so try DNS-over-HTTPS.
             return self._resolve_doh(qname, rdtype)
 
     def _resolve_doh(self, qname: str, rdtype: str) -> list:
@@ -68,17 +58,17 @@ class RobustResolver:
             url = "https://cloudflare-dns.com/dns-query"
             params = {"name": qname, "type": rdtype}
             headers = {"Accept": "application/dns-json"}
-            
+
             response = requests.get(url, params=params, headers=headers, timeout=self.timeout)
             response.raise_for_status()
-            
+
             data = response.json()
             if data.get("Status") == 0 and "Answer" in data:
                 # Mock Rdata object to mimic dnspython response (or just return simpler list?)
                 # For compatibility with BlacklistMonitor which expects rdata.to_text(),
                 # we should construct a simple object or just return strings if we change the consumer.
                 # To minimize consumer change, let's return a list of objects with a to_text() method.
-                
+
                 class DoHAnswer:
                     def __init__(self, val): self.val = val
                     def to_text(self): return self.val
@@ -88,10 +78,10 @@ class RobustResolver:
                 for ans in data["Answer"]:
                     if ans["type"] == wanted_type:
                         answers.append(DoHAnswer(ans["data"]))
-                
+
                 if answers:
                     return answers
-                    
+
             raise Exception(f"DoH Refused or No Data: {data.get('Status')}")
 
         except Exception as e:

@@ -15,7 +15,6 @@ import requests
 from src.monitors import rdap
 from src.monitors.domain_monitor import DomainMonitor
 
-
 # ── Fixtures shaped like real registry responses ─────────────────────────────
 
 def _payload(expiry="2027-08-13T04:00:00Z", registrar="Example Registrar, Inc.",

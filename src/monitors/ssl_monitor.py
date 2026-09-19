@@ -1,7 +1,9 @@
-import ssl
 import socket
+import ssl
 from datetime import datetime, timezone
+
 from loguru import logger
+
 from src.monitors.base_monitor import BaseMonitor
 
 

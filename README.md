@@ -157,6 +157,7 @@ The following environment variables takes precedence over file configuration:
 | Variable | Description |
 |----------|-------------|
 | `DOMAINMATE_CONFIG_FILE` | Path to valid configuration file (default: config.yaml) |
+| `DOMAINMATE_API_KEY` | When set, `POST /analyze` and `POST /notify/test` require an `X-API-Key` header carrying it. Unset leaves both open. |
 | `GITHUB_TOKEN` | GitHub Personal Access Token for issue creation |
 | `GITHUB_REPO` | Target GitHub repository (user/repo) |
 | `GITLAB_TOKEN` | GitLab Private Token |

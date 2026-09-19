@@ -26,6 +26,25 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # 0. Lint — fast, so it fails before the slower jobs start
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install tooling
+        run: pip install -r requirements-dev.txt
+
+      - name: Ruff
+        run: ruff check --output-format=github .
+
   # 1. Tests (gate for everything else)
   test:
     runs-on: ubuntu-latest
@@ -40,17 +59,24 @@ jobs:
           cache: 'pip'
 
       - name: Install dependencies
-        run: pip install -r requirements.txt pytest
+        run: pip install -r requirements.txt -r requirements-dev.txt
 
+      # The floor sits just under the current figure: it is there to catch a
+      # drop, not to chase a number. The uncovered code is the part that talks
+      # to the network, which the suite deliberately never does.
       - name: Run tests
         env:
           PYTHONPATH: .
-        run: pytest -q
+        run: >-
+          pytest -q
+          --cov=src --cov=api
+          --cov-report=term-missing
+          --cov-fail-under=60
 
   # 2. Daily audit — report is uploaded as a private CI artifact,
   #    NOT published to Pages (Pages hosts the VitePress docs via docs.yml)
   audit:
-    needs: test
+    needs: [lint, test]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -95,7 +121,7 @@ jobs:
 
   # 3. Docker Release Pipeline (Only on Tags/Main Push)
   docker-release:
-    needs: test
+    needs: [lint, test]
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:

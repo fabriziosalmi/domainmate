@@ -23,6 +23,8 @@ venv
 .venv
 .env
 Makefile
+requirements-dev.txt
+ruff.toml
 tests
 **/__pycache__
 **/*.py[cod]

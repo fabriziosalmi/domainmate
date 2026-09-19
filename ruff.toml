@@ -1,0 +1,39 @@
+# Lint configuration.
+#
+# The selection is deliberately narrow: rules that catch mistakes, not rules
+# that enforce a house style over a codebase that already has one. Anything
+# that fights a decision made on purpose is listed under `ignore` with the
+# reason, so the next person does not have to guess why it is off.
+
+line-length = 120
+target-version = "py312"
+
+[lint]
+select = [
+    "F",    # pyflakes — undefined names, unused imports, redefinitions
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "I",    # import sorting
+    "B",    # bugbear — likely bugs
+    "C4",   # comprehension shortcuts
+    "UP",   # syntax available on the target version
+]
+
+ignore = [
+    # Optional[x] reads consistently with the rest of this codebase; switching
+    # to x | None would be churn across every signature for no behaviour change.
+    "UP045", "UP007",
+    # `raise X` inside `except` without `from` is fine here: the monitors turn
+    # failures into result dicts, and the original is already logged.
+    "B904",
+    # datetime.UTC over timezone.utc is churn across two dozen call sites for
+    # no behaviour change.
+    "UP017",
+]
+
+[lint.per-file-ignores]
+# Tests build stub objects and patch attributes by name on purpose.
+"tests/*" = ["B010", "B017"]
+
+[lint.isort]
+known-first-party = ["src", "api"]

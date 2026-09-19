@@ -1,0 +1,10 @@
+# Development and CI tooling, pinned for the same reason the runtime
+# dependencies are: an upgrade should arrive as a reviewable pull request,
+# not as a red build nobody triggered.
+#
+#   pip install -r requirements.txt -r requirements-dev.txt
+
+pytest==9.1.1
+pytest-cov==7.1.0
+coverage==7.16.1
+ruff==0.16.8

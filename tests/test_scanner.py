@@ -13,7 +13,6 @@ import pytest
 
 from src.scanner import MONITOR_ORDER, scan_all, scan_domain
 
-
 CONFIG = {
     "monitors": {name: {"enabled": True} for name in MONITOR_ORDER},
 }
@@ -138,7 +137,9 @@ def test_two_runs_produce_the_same_order():
     domains = ["c.com", "a.com", "b.com"]
     first = asyncio.run(scan_all(domains, _monitors(tracker, 0.01), CONFIG, concurrency=20))
     second = asyncio.run(scan_all(domains, _monitors(tracker, 0.01), CONFIG, concurrency=20))
-    key = lambda rs: [(r["domain"], r["monitor"]) for r in rs]
+    def key(rs):
+        return [(r["domain"], r["monitor"]) for r in rs]
+
     assert key(first) == key(second)
 
 

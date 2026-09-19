@@ -127,6 +127,7 @@ dmypy.json
 # DomainMate Specific
 reports/*.html
 reports/*.json
+reports/report-*.json
 reports/notification_state.json
 reports/index.html
 

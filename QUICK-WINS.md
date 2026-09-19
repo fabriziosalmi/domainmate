@@ -5,24 +5,63 @@
 
 ---
 
-## 0. Stato
-
-**Lotto 0 completato** (#1, #2, #6, #7). Il resto del piano è invariato.
+## 0. Stato — tutti i lotti completati
 
 | # | Quick win | Stato |
 |---|---|---|
-| 1 | Exit code per la CI | ✅ `--fail-on` + `--json`, 21 test nuovi |
-| 2 | Pinning dipendenze | ✅ 14 pin `==` + Dependabot (pip, actions, npm) |
-| 6 | Docker non-root | ✅ UID/GID 10001 + `.dockerignore` (46 → 17 file nel contesto) |
-| 7 | encoding esplicito | ✅ 6 `open()` + `ensure_ascii=False` sui dump JSON |
+| 1 | Exit code per la CI | ✅ `--fail-on` + `--json`, e `3` per «non ho potuto eseguire» |
+| 2 | Pinning dipendenze | ✅ 14 pin + Dependabot (ha aperto 5 PR nei minuti dopo il merge) |
+| 3 | Chiavi di config morte | ✅ tutte e sette, più warning sulle chiavi sconosciute |
+| 4 | Template sovrascritto | ✅ scritto solo se manca; generatore da 467 a 89 righe |
+| 5 | Report self-contained | ✅ dipendenze rimosse, non incorporate: 48 KB, 0 richieste |
+| 6 | Docker non-root | ✅ UID/GID 10001, contesto di build da 46 file a 17 |
+| 7 | Encoding esplicito | ✅ sei `open()` + `ensure_ascii=False` |
+| 8 | RDAP prima di WHOIS | ⚠️ implementato, **non verificato contro un server reale** |
+| 9 | Scansione in parallelo | ✅ 5,8× misurato (24,5 s → 4,2 s su sette domini) |
+| 10 | Governance | ✅ SECURITY, CONTRIBUTING, template issue |
+| 11 | Chiave API opzionale | ✅ `DOMAINMATE_API_KEY`, `/metrics` resta aperto |
+| 12 | Storico report | ✅ snapshot per run + `retention_days` |
+| 13 | ruff + coverage in CI | ✅ 4 bug veri trovati, soglia al 60% |
+| 14 | `SSLMonitor` port ignorato | ⬜ backlog |
+| 15 | Blacklist IPv6 | ⬜ backlog |
 
-Due note sul Lotto 0:
+**Suite da 35 a 141 test.** `ruff check` pulito, coverage 63,8%.
 
-- Il contenitore ora gira come UID 10001, quindi una `reports/` montata da host
-  va resa scrivibile: `sudo chown -R 10001:10001 reports`.
-- `config.yaml` non finisce più nell'immagine (contiene la lista domini, che
-  verrebbe distribuita a ogni pull). Va montato a runtime — `docker-compose.yml`
-  e `make docker-run` lo fanno già.
+### Cosa è cambiato rispetto al piano
+
+**#5 — approccio invertito.** Il piano diceva di incorporare gli asset dei CDN.
+Misurandoli sono 418 KB su un report da 43, che con lo storico del #12
+diventerebbero ~14 MB di librerie duplicate — per una tabella da 35 righe che
+di Bootstrap usava trenta classi di utility. Sono stati rimossi e riscritti in
+~120 righe di JS vanilla: il report resta a 48 KB invece di crescere di dieci
+volte.
+
+**#3 — sette chiavi, non sei.** Il conteggio iniziale era sbagliato; le chiavi
+distinte sono sette. `retention_days` è arrivata col #12, perché potare uno
+storico che non esiste non significa niente.
+
+**#10 — il finding era sbagliato.** Avevo riportato che non era mai stato
+taggato un rilascio: falso, ne esistevano tre. Il clone di lavoro non prendeva
+i tag. Il problema vero era diverso — `api/api.py` fermo a `0.4.0` da una
+release intera, servito pubblicamente su `/metrics`.
+
+**Fuori piano.** `main.yml` non girava sulle pull request: la suite non aveva
+mai fatto da gate, i test partivano solo dopo il merge. Corretto nel lotto 0.
+
+### Il limite da conoscere
+
+**Il #8 non è stato provato contro una risposta RDAP reale**: la policy di rete
+dell'ambiente di lavoro nega `rdap.org` e i server dei registry. I 26 test
+usano payload conformi all'RFC 9083. Il fallback su WHOIS copre un eventuale
+errore di parsing riportando al comportamento precedente, ma la prima
+esecuzione vera va guardata:
+
+```bash
+python src/cli.py --json | jq '.[] | select(.monitor=="domain") | {domain, source}'
+```
+
+`source: "rdap"` significa che funziona; `"whois"` ovunque significa che il
+fallback sta coprendo un problema.
 
 ---
 

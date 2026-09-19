@@ -1,0 +1,63 @@
+name: Bug report
+description: Something does not behave the way the documentation says it should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Found a security issue? Please report it privately through
+        [Security Advisories](https://github.com/fabriziosalmi/domainmate/security/advisories/new)
+        instead — see `SECURITY.md`.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: And what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: >-
+        The command you ran and the relevant part of your config.yaml.
+        Remove your domain list if you would rather not share it — the
+        structure is what matters.
+      placeholder: |
+        $ python src/cli.py --fail-on critical
+        ...
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output
+      description: >-
+        Logs go to stderr. Please include the warnings, not just the error —
+        an "Unknown config key" line above the failure is often the answer.
+      render: shell
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: A tag, or the output of `git rev-parse --short HEAD`.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: how
+    attributes:
+      label: How are you running it?
+      options:
+        - CLI, locally
+        - CLI, in CI
+        - Docker / docker compose
+        - The API
+        - Something else
+    validations:
+      required: true

@@ -1,10 +1,13 @@
 import json
 import os
-from datetime import datetime, timedelta, timezone
-from loguru import logger
 from collections import defaultdict
+from datetime import datetime, timedelta, timezone
+
 from filelock import FileLock
+from loguru import logger
+
 from src.notifications.service import NotificationService
+
 
 class NotificationManager:
     def __init__(self, config: dict, state_file: str = "reports/notification_state.json"):
@@ -18,7 +21,7 @@ class NotificationManager:
         if os.path.exists(self.state_file):
             try:
                 with self._lock:
-                    with open(self.state_file, "r", encoding="utf-8") as f:
+                    with open(self.state_file, encoding="utf-8") as f:
                         return json.load(f)
             except Exception as e:
                 logger.error(f"Failed to load notification state: {e}")
@@ -87,7 +90,7 @@ class NotificationManager:
             if issue_id not in current_issues:
                 logger.success(f"Issue resolved: {issue_id}")
                 ids_to_remove.append(issue_id)
-        
+
         for i in ids_to_remove:
             del self.state[i]
 

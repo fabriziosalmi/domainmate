@@ -1,22 +1,31 @@
-import asyncio
 import argparse
+import asyncio
 import json
-import sys
-import aiohttp
-from urllib.parse import urlparse
-from loguru import logger
-from src.notifications.service import NotificationService
-from src.reporting.html_generator import HTMLGenerator
-from src.config import load_config, report_setting
-from src.scanner import build_monitors, scan_all
 import random
+import sys
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from urllib.parse import urlparse
+
+import aiohttp
+from loguru import logger
+
+from src.config import load_config, report_setting
 from src.constants import (
-    TIMEOUT_CLI_HTTP, DEFAULT_CONCURRENCY,
-    STATUS_WARNING, STATUS_CRITICAL, STATUS_ERROR,
-    EXIT_OK, EXIT_WARNING, EXIT_CRITICAL, EXIT_ERROR,
+    DEFAULT_CONCURRENCY,
+    EXIT_CRITICAL,
+    EXIT_ERROR,
+    EXIT_OK,
+    EXIT_WARNING,
+    STATUS_CRITICAL,
+    STATUS_ERROR,
+    STATUS_WARNING,
+    TIMEOUT_CLI_HTTP,
 )
+from src.notifications.service import NotificationService
+from src.reporting.html_generator import HTMLGenerator
+from src.scanner import build_monitors, scan_all
+
 
 def clean_domain(raw_domain: str) -> str:
     """
@@ -26,14 +35,14 @@ def clean_domain(raw_domain: str) -> str:
     # Remove protocol
     if "://" in raw_domain:
         raw_domain = raw_domain.split("://")[1]
-    
+
     # Remove path/params
     raw_domain = raw_domain.split("/")[0].split("?")[0]
-    
+
     # Remove port if present
     if ":" in raw_domain:
         raw_domain = raw_domain.split(":")[0]
-        
+
     return raw_domain.strip().lower()
 
 class _ArgumentParser(argparse.ArgumentParser):
@@ -104,14 +113,14 @@ def get_parent_domain(domain: str) -> str:
 
 def get_connectable_hostname(domain: str) -> Optional[str]:
     """
-    Try to find a resolvable hostname. 
+    Try to find a resolvable hostname.
     1. Try exact domain.
     2. Try www.domain.
     Uses RobustResolver to bypass local DNS issues.
     """
     from src.utils.dns_helpers import RobustResolver
     resolver = RobustResolver(timeout=2.0)
-    
+
     try:
         resolver.get_ip(domain)
         return domain
@@ -123,37 +132,45 @@ def get_connectable_hostname(domain: str) -> Optional[str]:
             return www
         except Exception:
             return None
- 
+
 
 def get_demo_data():
     """Generates fake data for demo purposes."""
     domains = [
-        "prod-api.com", "staging-app.net", "legacy-system.org", 
+        "prod-api.com", "staging-app.net", "legacy-system.org",
         "marketing-site.com", "internal-tool.io"
     ]
     results = []
-    
+
     for d in domains:
         # 1. Domain
         days = random.choice([5, 45, 200, 15])
         status = "ok"
-        if days < 7: status = "critical"
-        elif days < 30: status = "warning"
-        
+        if days < 7:
+            status = "critical"
+        elif days < 30:
+            status = "warning"
+
         results.append({
             "domain": d, "monitor": "domain", "status": status,
-            "days_until_expiry": days, "expiration_date": (datetime.now(timezone.utc) + timedelta(days=days)).strftime("%Y-%m-%d"),
+            "days_until_expiry": days,
+            "expiration_date": (datetime.now(timezone.utc)
+                                + timedelta(days=days)).strftime("%Y-%m-%d"),
             "message": f"Expires in {days} days"
         })
 
         # 2. SSL (one expired cert to showcase that state)
         ssl_days = -12 if d == "legacy-system.org" else random.choice([3, 100, 365])
         ssl_status = "ok"
-        if ssl_days < 7: ssl_status = "critical"
-        elif ssl_days < 30: ssl_status = "warning"
+        if ssl_days < 7:
+            ssl_status = "critical"
+        elif ssl_days < 30:
+            ssl_status = "warning"
         results.append({
             "domain": d, "monitor": "ssl", "status": ssl_status,
-            "days_until_expiry": ssl_days, "expiration_date": (datetime.now(timezone.utc) + timedelta(days=ssl_days)).strftime("%Y-%m-%d"),
+            "days_until_expiry": ssl_days,
+            "expiration_date": (datetime.now(timezone.utc)
+                                + timedelta(days=ssl_days)).strftime("%Y-%m-%d"),
             "message": f"Expired {-ssl_days} days ago" if ssl_days < 0 else f"Expires in {ssl_days} days"
         })
 
@@ -163,7 +180,7 @@ def get_demo_data():
             "message": "SPF and DMARC present",
             "details": {"spf": "v=spf1 include:_spf.google.com ~all", "dmarc": "v=DMARC1; p=reject;"}
         })
-        
+
         # 4. Blacklist (One failure)
         if d == "legacy-system.org":
             results.append({
@@ -242,7 +259,10 @@ async def main() -> int:
     # Init Services — each monitor reads its own monitors.<name> section
     monitors = build_monitors(config)
     notifier = NotificationService()
-    reporter = HTMLGenerator(output_dir=report_setting(config, "output_dir", "reports"))
+    reporter = HTMLGenerator(
+        output_dir=report_setting(config, "output_dir", "reports"),
+        retention_days=report_setting(config, "retention_days"),
+    )
 
     all_results = await scan_all(domains, monitors, config, args.concurrency)
 

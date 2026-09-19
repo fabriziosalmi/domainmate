@@ -2,8 +2,8 @@ from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from src.monitors.domain_monitor import DomainMonitor
 from src.monitors.dns_monitor import DNSMonitor
+from src.monitors.domain_monitor import DomainMonitor
 from src.monitors.security_monitor import SecurityMonitor
 
 
