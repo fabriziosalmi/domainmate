@@ -33,6 +33,12 @@ DEFAULT_REQUIRED_RECORDS = ["spf", "dmarc"]
 # a DKIM lookup needs a selector, which the config does not carry.
 SUPPORTED_REQUIRED_RECORDS = frozenset({"spf", "dmarc", "mx", "caa"})
 
+# ── RDAP ────────────────────────────────────────────────────────────────────
+# rdap.org is the IANA bootstrap mirror: it redirects to whichever registry is
+# authoritative for the TLD, so there is no per-TLD table to maintain here.
+RDAP_BOOTSTRAP_URL = "https://rdap.org"
+TIMEOUT_RDAP = 10.0
+
 # ── Scan concurrency ────────────────────────────────────────────────────────
 # Checks are network-bound, so they run in parallel; the cap keeps a long
 # domain list from hammering registries and RBL servers. Override with

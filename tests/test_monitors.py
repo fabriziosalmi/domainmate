@@ -18,27 +18,27 @@ def _whois_result(days_from_now, as_list=False):
 class TestDomainMonitor:
     def test_ok_status(self):
         with patch("src.monitors.domain_monitor.whois.whois", return_value=_whois_result(100)):
-            res = DomainMonitor().check_domain("example.com")
+            res = DomainMonitor(use_rdap=False).check_domain("example.com")
         assert res["status"] == "ok"
         assert res["monitor"] == "domain"
         assert res["registrar"] == "Test Registrar"
 
     def test_warning_under_30_days(self):
         with patch("src.monitors.domain_monitor.whois.whois", return_value=_whois_result(15)):
-            assert DomainMonitor().check_domain("example.com")["status"] == "warning"
+            assert DomainMonitor(use_rdap=False).check_domain("example.com")["status"] == "warning"
 
     def test_critical_under_7_days(self):
         with patch("src.monitors.domain_monitor.whois.whois", return_value=_whois_result(3)):
-            assert DomainMonitor().check_domain("example.com")["status"] == "critical"
+            assert DomainMonitor(use_rdap=False).check_domain("example.com")["status"] == "critical"
 
     def test_expiration_date_list_handled(self):
         with patch("src.monitors.domain_monitor.whois.whois", return_value=_whois_result(100, as_list=True)):
-            assert DomainMonitor().check_domain("example.com")["status"] == "ok"
+            assert DomainMonitor(use_rdap=False).check_domain("example.com")["status"] == "ok"
 
     def test_missing_expiration_is_error_with_monitor_key(self):
         w = SimpleNamespace(expiration_date=None, registrar=None)
         with patch("src.monitors.domain_monitor.whois.whois", return_value=w):
-            res = DomainMonitor().check_domain("example.com")
+            res = DomainMonitor(use_rdap=False).check_domain("example.com")
         assert res["status"] == "error"
         assert res["monitor"] == "domain"
 

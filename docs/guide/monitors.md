@@ -70,6 +70,37 @@ DomainMate automatically queries the parent domain for WHOIS to avoid errors lik
 }
 ```
 
+### RDAP and WHOIS
+
+Expiry is read over **RDAP** (RFC 9083) with WHOIS as the fallback.
+
+WHOIS speaks a line protocol on port 43, which is blocked in a great many
+containers, CI runners and corporate networks, is rate-limited, and answers
+with unstructured text that has to be parsed registrar by registrar. RDAP is
+the IETF replacement: HTTPS on 443, so it survives a proxy, and structured
+JSON, so there is nothing to guess at.
+
+The lookup goes through `rdap.org`, the IANA bootstrap mirror, which redirects
+to whichever registry is authoritative for the TLD. When a TLD has no RDAP
+server, the domain is not registered, or the request fails for any reason, the
+monitor logs why and falls back to WHOIS — so a TLD without RDAP behaves
+exactly as it did before.
+
+Each result records which path answered:
+
+```json
+{ "monitor": "domain", "source": "rdap", "days_until_expiry": 200 }
+```
+
+Set `use_rdap: false` to skip RDAP and go straight to WHOIS:
+
+```yaml
+monitors:
+  domain:
+    enabled: true
+    use_rdap: false
+```
+
 ## SSL Monitor
 
 ### Purpose
