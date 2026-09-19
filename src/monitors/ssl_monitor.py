@@ -4,24 +4,25 @@ from datetime import datetime, timezone
 
 from loguru import logger
 
+from src.constants import DEFAULT_TLS_PORT, TIMEOUT_SOCKET
 from src.monitors.base_monitor import BaseMonitor
 
 
 class SSLMonitor(BaseMonitor):
     monitor_name = "ssl"
 
-    def check_ssl(self, domain: str, port: int = 443) -> dict:
-        """Check SSL certificate validity and expiration."""
-        return self.check(domain)
+    def check_ssl(self, domain: str, port: int = DEFAULT_TLS_PORT) -> dict:
+        """Check SSL certificate validity and expiration on the given port."""
+        return self.check(domain, port=port)
 
-    def _run_check(self, domain: str, port: int = 443) -> dict:
+    def _run_check(self, domain: str, port: int = DEFAULT_TLS_PORT) -> dict:
         context = ssl.create_default_context()
         # Explicitly refuse TLS 1.0 and 1.1 — require TLS 1.2 as a minimum
         context.minimum_version = ssl.TLSVersion.TLSv1_2
 
         conn = None
         try:
-            raw_sock = socket.create_connection((domain, port), timeout=5.0)
+            raw_sock = socket.create_connection((domain, port), timeout=TIMEOUT_SOCKET)
             conn = context.wrap_socket(raw_sock, server_hostname=domain)
             cert = conn.getpeercert()
 
@@ -53,6 +54,7 @@ class SSLMonitor(BaseMonitor):
                 "days_until_expiry": days_until_expiry,
                 "issuer": common_name,
                 "version": cert.get("version"),
+                "port": port,
             }
         finally:
             if conn is not None:

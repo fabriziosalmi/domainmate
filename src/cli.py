@@ -13,6 +13,7 @@ from loguru import logger
 from src.config import load_config, report_setting
 from src.constants import (
     DEFAULT_CONCURRENCY,
+    DEFAULT_TLS_PORT,
     EXIT_CRITICAL,
     EXIT_ERROR,
     EXIT_OK,
@@ -83,6 +84,40 @@ def emit_json(results: list) -> None:
     """
     json.dump(results, sys.stdout, indent=2, default=str, ensure_ascii=False)
     sys.stdout.write("\n")
+
+def split_host_port(raw_domain: str) -> tuple:
+    """
+    Split a domains entry into (hostname, port or None).
+
+    A port in the config used to be discarded twice over: clean_domain()
+    stripped it, and SSLMonitor accepted a port argument it never passed on.
+    Keeping it here lets "mail.example.com:993" mean what it looks like, while
+    every monitor that only wants a hostname still gets one.
+    """
+    host = clean_domain(raw_domain)
+
+    # Same trimming clean_domain does, minus the step that drops the port
+    text = raw_domain.strip()
+    if "://" in text:
+        text = text.split("://", 1)[1]
+    text = text.split("/")[0].split("?")[0]
+
+    if ":" not in text:
+        return host, None
+
+    _, _, port_text = text.rpartition(":")
+    try:
+        port = int(port_text)
+    except ValueError:
+        logger.warning(f"{raw_domain}: '{port_text}' is not a port; using {DEFAULT_TLS_PORT}")
+        return host, None
+
+    if not 1 <= port <= 65535:
+        logger.warning(f"{raw_domain}: port {port} is out of range; using {DEFAULT_TLS_PORT}")
+        return host, None
+
+    return host, port
+
 
 def _validate_url(url: str, label: str) -> bool:
     """

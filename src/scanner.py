@@ -12,11 +12,12 @@ report.json regardless of which check happened to finish first.
 """
 
 import asyncio
+from functools import partial
 
 from loguru import logger
 
 from src.config import monitor_enabled
-from src.constants import DEFAULT_CONCURRENCY, STATUS_CRITICAL
+from src.constants import DEFAULT_CONCURRENCY, DEFAULT_TLS_PORT, STATUS_CRITICAL
 from src.monitors.blacklist_monitor import BlacklistMonitor
 from src.monitors.dns_monitor import DNSMonitor
 from src.monitors.domain_monitor import DomainMonitor
@@ -61,9 +62,11 @@ async def scan_domain(raw_domain: str, monitors: dict, config: dict,
     Run the enabled monitors for one domain and return their results in
     MONITOR_ORDER.
     """
-    from src.cli import clean_domain, get_connectable_hostname, get_parent_domain
+    from src.cli import get_connectable_hostname, get_parent_domain, split_host_port
 
-    domain = clean_domain(raw_domain)
+    # Only the TLS check cares about a port; WHOIS, DNS and the RBLs all want
+    # the bare hostname.
+    domain, port = split_host_port(raw_domain)
     parent = get_parent_domain(domain)
     logger.info(f"Checking {domain}...")
 
@@ -79,8 +82,16 @@ async def scan_domain(raw_domain: str, monitors: dict, config: dict,
                         f"(Parent: {parent}) " if parent != domain else ""))
 
     if monitor_enabled(config, "ssl") and connectable:
-        planned.append(("ssl", monitors["ssl"].check_ssl, connectable,
-                        f"(Checked {connectable}) " if connectable != domain else ""))
+        if port is not None:
+            label = f"(Checked {connectable}:{port}) "
+        else:
+            label = f"(Checked {connectable}) " if connectable != domain else ""
+        planned.append((
+            "ssl",
+            partial(monitors["ssl"].check_ssl, port=port or DEFAULT_TLS_PORT),
+            connectable,
+            label,
+        ))
 
     if monitor_enabled(config, "dns"):
         planned.append(("dns", monitors["dns"].check_dns, parent,

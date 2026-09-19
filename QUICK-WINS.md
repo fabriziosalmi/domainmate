@@ -5,7 +5,7 @@
 
 ---
 
-## 0. Stato — tutti i lotti completati
+## 0. Stato — completato, backlog compreso
 
 | # | Quick win | Stato |
 |---|---|---|
@@ -22,10 +22,12 @@
 | 11 | Chiave API opzionale | ✅ `DOMAINMATE_API_KEY`, `/metrics` resta aperto |
 | 12 | Storico report | ✅ snapshot per run + `retention_days` |
 | 13 | ruff + coverage in CI | ✅ 4 bug veri trovati, soglia al 60% |
-| 14 | `SSLMonitor` port ignorato | ⬜ backlog |
-| 15 | Blacklist IPv6 | ⬜ backlog |
+| 14 | `SSLMonitor` port ignorato | ✅ la porta arriva dalla lista domini al socket |
+| 15 | Blacklist IPv6 | ✅ IPv6 e IP multipli, fino a quattro per dominio |
 
-**Suite da 35 a 141 test.** `ruff check` pulito, coverage 63,8%.
+**Suite da 35 a 167 test.** `ruff check` pulito.
+
+Tutti e quindici gli interventi sono fatti: il backlog è stato chiuso dopo i lotti.
 
 ### Cosa è cambiato rispetto al piano
 

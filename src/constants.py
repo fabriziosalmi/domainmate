@@ -33,6 +33,11 @@ DEFAULT_REQUIRED_RECORDS = ["spf", "dmarc"]
 # a DKIM lookup needs a selector, which the config does not carry.
 SUPPORTED_REQUIRED_RECORDS = frozenset({"spf", "dmarc", "mx", "caa"})
 
+# ── TLS ─────────────────────────────────────────────────────────────────────
+# A domains entry may carry a port ("mail.example.com:993"); the SSL check
+# honours it and every other monitor uses the bare hostname.
+DEFAULT_TLS_PORT = 443
+
 # ── RDAP ────────────────────────────────────────────────────────────────────
 # rdap.org is the IANA bootstrap mirror: it redirects to whichever registry is
 # authoritative for the TLD, so there is no per-TLD table to maintain here.
@@ -50,6 +55,11 @@ DEFAULT_CONCURRENCY = 8
 RBL_BLOCKED_PREFIX = "127.255.255."
 # PBL/Policy listings: indicate dynamic or consumer IP space — not actionable
 RBL_PBL_IPS = frozenset({"127.0.0.10", "127.0.0.11"})
+
+# Addresses checked per domain. A name behind a CDN can answer with a dozen,
+# and each one costs a query per RBL, so the list is capped rather than
+# unbounded.
+MAX_IPS_PER_DOMAIN = 4
 
 # ── Default RBL list (override via config.yaml: monitors.blacklist.rbls) ─────
 DEFAULT_RBLS = [

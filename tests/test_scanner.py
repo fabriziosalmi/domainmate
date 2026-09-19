@@ -26,7 +26,8 @@ class _RecordingMonitor:
         self.name = name
         self.delay = delay
 
-    def __call__(self, target):
+    def __call__(self, target, **kwargs):
+        # **kwargs mirrors the real checks: SSLMonitor.check_ssl takes a port
         self.tracker.enter()
         try:
             time.sleep(self.delay)
@@ -185,7 +186,7 @@ def test_one_failing_monitor_does_not_lose_the_others():
     tracker = _Tracker()
     mons = _monitors(tracker, delay=0.01)
 
-    def boom(target):
+    def boom(target, **kwargs):
         raise RuntimeError("monitor exploded")
 
     setattr(mons["ssl"], "check_ssl", boom)

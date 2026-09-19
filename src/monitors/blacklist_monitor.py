@@ -1,8 +1,39 @@
+import ipaddress
+
 import dns.resolver
 from loguru import logger
 
-from src.constants import DEFAULT_RBLS, RBL_BLOCKED_PREFIX, RBL_PBL_IPS
+from src.constants import (
+    DEFAULT_RBLS,
+    MAX_IPS_PER_DOMAIN,
+    RBL_BLOCKED_PREFIX,
+    RBL_PBL_IPS,
+)
 from src.monitors.base_monitor import BaseMonitor
+
+
+def rbl_query_name(ip: str) -> str:
+    """
+    Build the name a DNSBL is asked about.
+
+    IPv4 reverses the octets (1.2.3.4 -> 4.3.2.1). IPv6 reverses the 32 hex
+    nibbles, which is what the DNSBL specifications and PTR records under
+    ip6.arpa both use.
+
+    An IPv4-mapped address (::ffff:1.2.3.4) is that IPv4 address, and a DNSBL
+    expects it in the IPv4 form, so it is unwrapped first. The nibbles come
+    from the packed bytes rather than `.exploded`, whose IPv4-mapped rendering
+    keeps a dotted quad on the end.
+    """
+    address = ipaddress.ip_address(ip)
+
+    mapped = getattr(address, "ipv4_mapped", None)
+    if mapped is not None:
+        address = mapped
+
+    if address.version == 4:
+        return ".".join(reversed(address.exploded.split(".")))
+    return ".".join(reversed(address.packed.hex()))
 
 
 class BlacklistMonitor(BaseMonitor):
@@ -21,63 +52,97 @@ class BlacklistMonitor(BaseMonitor):
         return cls(rbls=(cfg or {}).get("rbls"))
 
     def check_blacklist(self, domain: str) -> dict:
-        """Resolve domain to IP and check against common RBLs."""
+        """Resolve the domain and check every address against the RBLs."""
         return self.check(domain)
 
-    def _run_check(self, domain: str) -> dict:
+    def _query_rbl(self, rbl: str, ip: str, domain: str) -> bool:
+        """True when this RBL lists this address."""
+        try:
+            query = f"{rbl_query_name(ip)}.{rbl}"
+        except ValueError:
+            logger.warning(f"Skipping malformed address {ip!r} for {domain}")
+            return False
+
+        try:
+            answers = self.system_resolver.resolve(query, "A")
+        except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
+            return False  # not listed — the expected answer
+        except Exception as e:
+            logger.debug(f"{rbl} lookup failed for {ip}: {e}")
+            return False
+
+        for rdata in answers:
+            code = rdata.to_text()
+
+            # Query blocked / refused (e.g. 127.255.255.x via public DNS)
+            if code.startswith(RBL_BLOCKED_PREFIX):
+                logger.warning(
+                    f"RBL {rbl} blocked query for {domain} (Code: {code}). Using public DNS?"
+                )
+                continue
+
+            # PBL / Policy listings — dynamic/consumer IPs, not actionable
+            if code in RBL_PBL_IPS:
+                continue
+
+            return True
+        return False
+
+    def _addresses(self, domain: str) -> list:
+        """
+        Every address the domain answers with, v4 and v6, capped.
+
+        Resolving only the first A record left a CDN-hosted name mostly
+        unchecked and an IPv6-only name failing outright.
+        """
         from src.utils.dns_helpers import RobustResolver
         resolver = RobustResolver(timeout=2.0)
 
-        # 1. Resolve Domain to IP
-        try:
-            ip = resolver.get_ip(domain)
-        except Exception as e:
-            return self._error_result(f"Could not resolve domain: {e}")
+        addresses = resolver.get_ips(domain, "A") + resolver.get_ips(domain, "AAAA")
 
-        # 2. Prepare Reverse IP for DNSBL query (1.2.3.4 -> 4.3.2.1)
-        reversed_ip = ".".join(reversed(ip.split(".")))
+        # Preserve order while dropping duplicates
+        unique = list(dict.fromkeys(addresses))
+        if len(unique) > MAX_IPS_PER_DOMAIN:
+            logger.info(
+                f"{domain} resolves to {len(unique)} addresses; "
+                f"checking the first {MAX_IPS_PER_DOMAIN}"
+            )
+        return unique[:MAX_IPS_PER_DOMAIN]
 
-        listed_in = []
-        errors = []
+    def _run_check(self, domain: str) -> dict:
+        addresses = self._addresses(domain)
+        if not addresses:
+            return self._error_result("Could not resolve domain")
 
-        # 3. Query RBLs
-        for rbl in self.rbls:
-            query = f"{reversed_ip}.{rbl}"
-            try:
-                answers = self.system_resolver.resolve(query, "A")
-                for rdata in answers:
-                    result_ip = rdata.to_text()
+        # rbl -> the addresses it lists
+        listings = {}
+        for ip in addresses:
+            for rbl in self.rbls:
+                if self._query_rbl(rbl, ip, domain):
+                    listings.setdefault(rbl, []).append(ip)
 
-                    # Query blocked / refused (e.g. 127.255.255.x via public DNS)
-                    if result_ip.startswith(RBL_BLOCKED_PREFIX):
-                        logger.warning(
-                            f"RBL {rbl} blocked query for {domain} (Code: {result_ip}). Using public DNS?"
-                        )
-                        continue
+        listed_in = list(listings)
+        listed_ips = sorted({ip for ips in listings.values() for ip in ips})
 
-                    # PBL / Policy listings — dynamic/consumer IPs, not actionable
-                    if result_ip in RBL_PBL_IPS:
-                        continue
+        if listed_in:
+            message = (
+                f"Listed in {len(listed_in)} RBL(s)"
+                if len(addresses) == 1
+                else f"Listed in {len(listed_in)} RBL(s) "
+                     f"for {len(listed_ips)} of {len(addresses)} addresses"
+            )
+        else:
+            message = "Not listed in any common RBL"
 
-                    if rbl not in listed_in:
-                        listed_in.append(rbl)
-
-            except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
-                # Not listed — expected result
-                pass
-            except Exception as e:
-                errors.append(f"{rbl}: {e}")
-
-        status = "critical" if listed_in else "ok"
         return {
             "monitor": self.monitor_name,
-            "status": status,
-            "ip": ip,
+            "status": "critical" if listed_in else "ok",
+            # `ip` stays for the report and for anything already reading it
+            "ip": addresses[0],
+            "ips": addresses,
             "listed_in": listed_in,
+            "listed_ips": listed_ips,
+            "listings": listings,
             "checked_rbls": len(self.rbls),
-            "message": (
-                f"Listed in {len(listed_in)} blacklists"
-                if listed_in
-                else "Not listed in any common RBL"
-            ),
+            "message": message,
         }
