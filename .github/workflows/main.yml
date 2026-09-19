@@ -123,7 +123,7 @@ jobs:
             type=sha,format=short
 
       - name: Build and Push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
