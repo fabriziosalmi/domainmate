@@ -5,19 +5,15 @@ import sys
 import aiohttp
 from urllib.parse import urlparse
 from loguru import logger
-from src.monitors.domain_monitor import DomainMonitor
-from src.monitors.ssl_monitor import SSLMonitor
-from src.monitors.dns_monitor import DNSMonitor
-from src.monitors.security_monitor import SecurityMonitor
-from src.monitors.blacklist_monitor import BlacklistMonitor
 from src.notifications.service import NotificationService
 from src.reporting.html_generator import HTMLGenerator
-from src.config import load_config, monitor_config, monitor_enabled, report_setting
+from src.config import load_config, report_setting
+from src.scanner import build_monitors, scan_all
 import random
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from src.constants import (
-    TIMEOUT_CLI_HTTP,
+    TIMEOUT_CLI_HTTP, DEFAULT_CONCURRENCY,
     STATUS_WARNING, STATUS_CRITICAL, STATUS_ERROR,
     EXIT_OK, EXIT_WARNING, EXIT_CRITICAL, EXIT_ERROR,
 )
@@ -204,6 +200,16 @@ async def main() -> int:
         ),
     )
     parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=DEFAULT_CONCURRENCY,
+        metavar="N",
+        help=(
+            f"How many checks may run at once (default: {DEFAULT_CONCURRENCY}). "
+            f"Lower it if a registry or RBL rate-limits you."
+        ),
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         dest="emit_json",
@@ -234,90 +240,11 @@ async def main() -> int:
         return EXIT_OK
 
     # Init Services — each monitor reads its own monitors.<name> section
-    domain_monitor = DomainMonitor.from_config(monitor_config(config, "domain"))
-    ssl_monitor = SSLMonitor.from_config(monitor_config(config, "ssl"))
-    dns_monitor = DNSMonitor.from_config(monitor_config(config, "dns"))
-    security_monitor = SecurityMonitor.from_config(monitor_config(config, "security"))
-    blacklist_monitor = BlacklistMonitor.from_config(monitor_config(config, "blacklist"))
+    monitors = build_monitors(config)
     notifier = NotificationService()
     reporter = HTMLGenerator(output_dir=report_setting(config, "output_dir", "reports"))
 
-    all_results = []
-    
-    logger.info(f"Starting check for {len(domains)} domains...")
-
-    for raw_domain in domains:
-        domain = clean_domain(raw_domain)
-        logger.info(f"Checking {domain}...")
-        
-        # Determine best target for connection-based checks (SSL, Security)
-        connectable_host = get_connectable_hostname(domain)
-        parent_domain = get_parent_domain(domain)
-        
-        # We sequentially check for now to be gentle, could be async gathered
-        # 1. Domain (WHOIS always uses root/parent)
-        if monitor_enabled(config, "domain"):
-            try:
-                # Use parent domain for WHOIS to avoid "No whois server found for subdomain" errors
-                check_target = parent_domain
-                res = domain_monitor.check_domain(check_target)
-                res["domain"] = domain # Keep original label
-                if check_target != domain:
-                    res["message"] = f"(Parent: {check_target}) {res.get('message', '')}"
-                all_results.append(res)
-            except Exception as e:
-                logger.error(f"Domain monitor failed for {domain}: {e}")
-
-        # 2. SSL (Use connectable host)
-        if monitor_enabled(config, "ssl"):
-            if connectable_host:
-                res = ssl_monitor.check_ssl(connectable_host)
-                if connectable_host != domain:
-                    res["message"] = f"(Checked {connectable_host}) {res.get('message', '')}"
-                res["domain"] = domain
-                all_results.append(res)
-            else:
-                logger.warning(f"Skipping SSL check for {domain}: DNS resolution failed.")
-                all_results.append({
-                    "domain": domain,
-                    "monitor": "ssl",
-                    "status": "critical",
-                    "message": "DNS Resolution Failed",
-                    "details": {"error": "Could not resolve hostname or www subdomain"}
-                })
-        
-        # 3. DNS (Always root/parent)
-        if monitor_enabled(config, "dns"):
-            check_target = parent_domain
-            res = dns_monitor.check_dns(check_target)
-            res["domain"] = domain
-            if check_target != domain:
-                 res["message"] = f"(Parent: {check_target}) {res.get('message', '')}"
-            all_results.append(res)
-
-        # 4. Security (Use connectable host)
-        if monitor_enabled(config, "security"):
-            if connectable_host:
-                res = security_monitor.check_security(connectable_host)
-                if connectable_host != domain:
-                    res["message"] = f"(Checked {connectable_host}) {res.get('message', '')}"
-                res["domain"] = domain
-                all_results.append(res)
-            else:
-                 logger.warning(f"Skipping Security check for {domain}: DNS resolution failed.")
-                 all_results.append({
-                    "domain": domain,
-                    "monitor": "security",
-                    "status": "critical",
-                    "message": "DNS Resolution Failed",
-                    "details": {"error": "Could not resolve hostname or www subdomain"}
-                })
-
-        # 5. Blacklist (Always root/IP mainly)
-        if monitor_enabled(config, "blacklist"):
-            res = blacklist_monitor.check_blacklist(domain)
-            res["domain"] = domain
-            all_results.append(res)
+    all_results = await scan_all(domains, monitors, config, args.concurrency)
 
     # Generate Report
     report_path = reporter.generate(all_results)

@@ -19,7 +19,7 @@ hero:
 features:
   - icon: 🔍
     title: Domain Validity Monitoring
-    details: WHOIS expiration tracking with parent domain detection for subdomains.
+    details: Expiration tracking over RDAP (RFC 9083) with a WHOIS fallback, plus parent domain detection for subdomains. RDAP is HTTPS on 443, so it works where WHOIS on port 43 is blocked.
   - icon: 🔒
     title: SSL/TLS Check
     details: Certificate expiration date and detection of deprecated TLS 1.0/1.1 protocols (where supported by the local OpenSSL build).

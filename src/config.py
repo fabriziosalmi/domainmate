@@ -22,7 +22,8 @@ _KNOWN_TOP_LEVEL = frozenset({
 })
 
 _KNOWN_MONITOR_KEYS = {
-    "domain": frozenset({"enabled", "expiry_warning_days", "expiry_critical_days"}),
+    "domain": frozenset({"enabled", "expiry_warning_days", "expiry_critical_days",
+                         "use_rdap"}),
     "ssl": frozenset({"enabled", "expiry_warning_days", "expiry_critical_days"}),
     "dns": frozenset({"enabled", "required_records"}),
     "security": frozenset({"enabled"}),

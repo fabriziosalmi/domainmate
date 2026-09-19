@@ -230,7 +230,7 @@ The `NotificationService` class reads configuration from environment variables (
 
 **Execution flow:**
 1. Load and parse `config.yaml`
-2. For each domain: run enabled monitors sequentially
+2. For each domain: run the enabled monitors concurrently, bounded by a semaphore
 3. Generate HTML report
 4. Optionally send heartbeat GET request
 5. Optionally upload results as JSON to `api_url`
@@ -309,9 +309,16 @@ The API server is not required for normal CLI usage.
 
 - Active support, performance improvements, and a rich ecosystem for DNS, SSL, and HTTP libraries
 
-### Why Sequential Checks?
+### Why Threads and Not Async Monitors?
 
-Checks currently run sequentially per domain. The CLI is `async` to support the aiohttp-based heartbeat and API upload, but monitor checks are synchronous. A future enhancement could parallelize checks across domains.
+The monitors are blocking by nature: `python-whois` opens a socket, `ssl` and
+`socket` connect directly, `dnspython` and `requests` are synchronous. Rather
+than rewrite five monitors against async libraries, `src/scanner.py` hands each
+check to `asyncio.to_thread` and gathers them — the pattern `api/api.py` had
+been using for a single domain since before the CLI did.
+
+A semaphore bounds how many run at once, so a long domain list does not hammer
+registries and RBL servers, both of which rate-limit per source IP.
 
 ### Why Static HTML Reports?
 
@@ -358,7 +365,8 @@ Approximate time per domain with all monitors enabled:
 
 **Total per domain: ~15-30 seconds**
 
-Checks run sequentially. For 10 domains, expect approximately 3-5 minutes.
+Checks run concurrently, so wall-clock time is close to the slowest single
+domain rather than the sum of all of them. Tune with `--concurrency`.
 
 ## Extensibility
 
