@@ -19,7 +19,7 @@ from src.notifications.service import NotificationService
 
 limiter = Limiter(key_func=get_remote_address)
 
-app = FastAPI(title="DomainMate API", version="0.4.0")
+app = FastAPI(title="DomainMate API", version="0.5.0")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
