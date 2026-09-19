@@ -15,7 +15,7 @@ class HTMLGenerator:
         self._create_default_template(os.path.join(template_dir, "report.html"))
 
     def _create_default_template(self, path: str):
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write("""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -457,11 +457,11 @@ class HTMLGenerator:
         )
         
         output_file = os.path.join(self.output_dir, "index.html")
-        with open(output_file, "w") as f:
+        with open(output_file, "w", encoding="utf-8") as f:
             f.write(html_content)
         
         json_file = os.path.join(self.output_dir, f"report.json")
-        with open(json_file, "w") as f:
-            json.dump(results, f, indent=2, default=str)
+        with open(json_file, "w", encoding="utf-8") as f:
+            json.dump(results, f, indent=2, default=str, ensure_ascii=False)
             
         return output_file

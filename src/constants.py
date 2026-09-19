@@ -6,6 +6,15 @@ STATUS_WARNING = "warning"
 STATUS_CRITICAL = "critical"
 STATUS_ERROR = "error"
 
+# ── CLI exit codes ───────────────────────────────────────────────────────────
+# 0/1/2 describe the scan outcome; 3 is reserved for operational failures
+# (unreadable config, bad usage) so a CI job can tell "found problems" apart
+# from "could not run". See --fail-on in src/cli.py.
+EXIT_OK = 0
+EXIT_WARNING = 1
+EXIT_CRITICAL = 2
+EXIT_ERROR = 3
+
 # ── Expiry thresholds (days) ─────────────────────────────────────────────────
 EXPIRY_WARNING_DAYS = 30
 EXPIRY_CRITICAL_DAYS = 7

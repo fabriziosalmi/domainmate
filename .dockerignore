@@ -1,0 +1,39 @@
+# Build context exclusions. Without this file `COPY . .` ships the entire git
+# history, the docs site, the screenshot and any local virtualenv into the image.
+
+# ── Version control & CI ─────────────────────────────────────────────────────
+.git
+.gitignore
+.github
+.dockerignore
+
+# ── Documentation site (not needed at runtime) ───────────────────────────────
+docs
+node_modules
+package.json
+package-lock.json
+screenshot.png
+README.md
+QUICK-WINS.md
+CHANGELOG.md
+LICENSE
+
+# ── Local development ────────────────────────────────────────────────────────
+venv
+.venv
+.env
+Makefile
+tests
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+.ruff_cache
+
+# ── Runtime output (bind-mounted, never baked in) ────────────────────────────
+reports
+
+# ── Private configuration ────────────────────────────────────────────────────
+# config.yaml holds the domain list. Baking it into a published image would
+# distribute it with every pull, so it is mounted at run time instead — both
+# docker-compose.yml and `make docker-run` already do exactly that.
+config.yaml

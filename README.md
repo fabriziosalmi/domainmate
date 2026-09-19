@@ -52,6 +52,30 @@ make install
 make run
 ```
 
+### CLI Options
+
+```bash
+python src/cli.py [--config PATH] [--notify] [--demo]
+                  [--fail-on {never,warning,critical}] [--json]
+```
+
+`--fail-on` makes the exit code reflect what the scan found, so a CI job can
+gate on it. It defaults to `never`, which keeps the exit code at `0` the way it
+has always been.
+
+| Code | Meaning |
+|------|---------|
+| `0` | No findings at or above the `--fail-on` level |
+| `1` | Warning-level findings (`--fail-on warning`) |
+| `2` | Critical or error findings (`--fail-on warning` or `critical`) |
+| `3` | Could not run — unreadable config, or invalid command line |
+
+`--json` writes the full result set to stdout; logs stay on stderr, so it pipes
+cleanly into `jq`.
+
+See the [CLI Reference](https://fabriziosalmi.github.io/domainmate/guide/cli)
+for the full list.
+
 ### Docker Deployment
 
 ```bash
@@ -61,6 +85,17 @@ make docker-build
 # Execute the container
 make docker-run
 ```
+
+The container runs as an unprivileged user (UID/GID `10001`), so a bind-mounted
+reports directory on the host has to be writable by it:
+
+```bash
+mkdir -p reports && sudo chown -R 10001:10001 reports
+```
+
+`config.yaml` is deliberately **not** baked into the image — it holds your
+domain list, and a published image would distribute it with every pull. Mount it
+at run time instead; `docker-compose.yml` and `make docker-run` already do.
 
 ## Configuration
 

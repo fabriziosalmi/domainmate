@@ -6,6 +6,11 @@ on:
   push:
     branches: [ "main" ]
     tags: [ 'v*.*.*' ]
+  # Without this the test job only runs after a merge, so nothing gates a
+  # pull request. The audit job opts out below — a PR must not fire a real
+  # domain scan with notifications.
+  pull_request:
+    branches: [ "main" ]
   workflow_dispatch:
 
 env:
@@ -46,6 +51,7 @@ jobs:
   #    NOT published to Pages (Pages hosts the VitePress docs via docs.yml)
   audit:
     needs: test
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -77,7 +83,10 @@ jobs:
           TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
         run: python src/cli.py --notify
 
+      # always(): a future --fail-on would otherwise skip this step and lose
+      # the report that explains why the audit failed.
       - name: Upload report artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: domainmate-report

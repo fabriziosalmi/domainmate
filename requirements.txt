@@ -1,14 +1,30 @@
-fastapi
-uvicorn
-jinja2
-pyyaml
-python-whois
-dnspython
-requests
-aiohttp
-PyGithub
-python-gitlab
-pydantic-settings
-loguru
-slowapi
-filelock
+# Direct dependencies, pinned to exact versions.
+#
+# The audit runs unattended on a daily schedule, so a breaking release upstream
+# would otherwise break the scan without anyone touching this repository, and
+# Docker builds would not be reproducible. Dependabot (.github/dependabot.yml)
+# turns each upgrade into a reviewable pull request instead.
+
+# ── API ──────────────────────────────────────────────────────────────────────
+fastapi==0.141.1
+uvicorn==0.53.0
+slowapi==0.1.10
+pydantic-settings==2.15.0
+
+# ── Monitors ─────────────────────────────────────────────────────────────────
+python-whois==0.9.6
+dnspython==2.8.0
+requests==2.34.2
+aiohttp==3.14.3
+
+# ── Reporting ────────────────────────────────────────────────────────────────
+jinja2==3.1.6
+pyyaml==6.0.3
+
+# ── Notifications ────────────────────────────────────────────────────────────
+PyGithub==2.10.0
+python-gitlab==8.5.0
+
+# ── Support ──────────────────────────────────────────────────────────────────
+loguru==0.7.3
+filelock==4.0.1

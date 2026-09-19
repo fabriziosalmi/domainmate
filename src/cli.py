@@ -1,6 +1,7 @@
 import yaml
 import asyncio
 import argparse
+import json
 import sys
 import os
 import aiohttp
@@ -16,7 +17,11 @@ from src.reporting.html_generator import HTMLGenerator
 import random
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from src.constants import TIMEOUT_CLI_HTTP
+from src.constants import (
+    TIMEOUT_CLI_HTTP,
+    STATUS_WARNING, STATUS_CRITICAL, STATUS_ERROR,
+    EXIT_OK, EXIT_WARNING, EXIT_CRITICAL, EXIT_ERROR,
+)
 
 def clean_domain(raw_domain: str) -> str:
     """
@@ -35,6 +40,45 @@ def clean_domain(raw_domain: str) -> str:
         raw_domain = raw_domain.split(":")[0]
         
     return raw_domain.strip().lower()
+
+class _ArgumentParser(argparse.ArgumentParser):
+    """
+    argparse exits with 2 on a usage error, which would be indistinguishable
+    from "critical findings". Usage errors are operational, so they use
+    EXIT_ERROR like every other failure to run.
+    """
+
+    def error(self, message):
+        self.print_usage(sys.stderr)
+        self.exit(EXIT_ERROR, f"{self.prog}: error: {message}\n")
+
+def compute_exit_code(results: list, fail_on: str) -> int:
+    """
+    Map scan results to a process exit code so CI can gate on findings.
+
+    never    - always EXIT_OK; the scan result never fails the build (default,
+               so existing pipelines keep the behaviour they have today)
+    warning  - EXIT_WARNING on warnings, EXIT_CRITICAL on critical/error
+    critical - EXIT_CRITICAL on critical/error only; warnings do not fail
+    """
+    if fail_on == "never":
+        return EXIT_OK
+
+    statuses = {r.get("status") for r in results}
+
+    if statuses & {STATUS_CRITICAL, STATUS_ERROR}:
+        return EXIT_CRITICAL
+    if fail_on == "warning" and STATUS_WARNING in statuses:
+        return EXIT_WARNING
+    return EXIT_OK
+
+def emit_json(results: list) -> None:
+    """
+    Write the full result set to stdout. Logs go to stderr (loguru's default),
+    so stdout stays clean enough to pipe into jq.
+    """
+    json.dump(results, sys.stdout, indent=2, default=str, ensure_ascii=False)
+    sys.stdout.write("\n")
 
 def _validate_url(url: str, label: str) -> bool:
     """
@@ -140,11 +184,32 @@ def get_demo_data():
 
     return results
 
-async def main():
-    parser = argparse.ArgumentParser(description="DomainMate CLI")
+async def main() -> int:
+    parser = _ArgumentParser(
+        description="DomainMate CLI",
+        epilog=(
+            "Exit codes: 0 no findings above the threshold, 1 warnings, "
+            "2 critical or error findings, 3 could not run."
+        ),
+    )
     parser.add_argument("--config", default="config.yaml", help="Path to config file")
     parser.add_argument("--notify", action="store_true", help="Enable notifications")
     parser.add_argument("--demo", action="store_true", help="Run with mock data for demonstration")
+    parser.add_argument(
+        "--fail-on",
+        choices=["never", "warning", "critical"],
+        default="never",
+        help=(
+            "Exit non-zero when the scan finds issues at this level or worse. "
+            "Default: never, so the exit code stays 0 as it always has."
+        ),
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="emit_json",
+        help="Write the full result set as JSON to stdout (logs stay on stderr)",
+    )
     args = parser.parse_args()
 
     if args.demo:
@@ -153,22 +218,24 @@ async def main():
         all_results = get_demo_data()
         report_path = reporter.generate(all_results)
         logger.success(f"Demo Report generated at {report_path}")
-        return
+        if args.emit_json:
+            emit_json(all_results)
+        return compute_exit_code(all_results, args.fail_on)
 
     # Load Config
     config_path = os.environ.get("DOMAINMATE_CONFIG_FILE", args.config)
     try:
-        with open(config_path, "r") as f:
+        with open(config_path, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)
         logger.info(f"Loaded config from {config_path}")
     except Exception as e:
         logger.error(f"Failed to load config from {config_path}: {e}")
-        sys.exit(1)
+        return EXIT_ERROR
 
     domains = config.get("domains", [])
     if not domains:
         logger.warning("No domains found in config.")
-        sys.exit(0)
+        return EXIT_OK
 
     # Init Services
     domain_monitor = DomainMonitor()
@@ -302,5 +369,13 @@ async def main():
             )
             await notifier.send_notification("DomainMate Alert", msg, level)
 
+    if args.emit_json:
+        emit_json(all_results)
+
+    exit_code = compute_exit_code(all_results, args.fail_on)
+    if exit_code != EXIT_OK:
+        logger.warning(f"Exiting with code {exit_code} (--fail-on {args.fail_on})")
+    return exit_code
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    sys.exit(asyncio.run(main()))

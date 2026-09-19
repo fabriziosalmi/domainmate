@@ -59,6 +59,39 @@ python src/cli.py --demo
 - Creates realistic report
 - No network requests made
 
+### `--fail-on`
+
+Exit with a non-zero status when the scan finds issues, so a CI job can fail on
+findings instead of reporting green regardless of what the audit turned up.
+
+```bash
+python src/cli.py --fail-on critical
+```
+
+| Value | Behaviour |
+|---|---|
+| `never` | The scan result never changes the exit code. **Default**, so existing pipelines are unaffected. |
+| `warning` | Exit `1` on warnings, `2` on critical or error findings. |
+| `critical` | Exit `2` on critical or error findings. Warnings do not fail. |
+
+A critical finding always outranks a warning: with `--fail-on warning`, a run
+that contains both exits `2`, not `1`.
+
+### `--json`
+
+Write the full result set to stdout as JSON.
+
+```bash
+python src/cli.py --json | jq '[.[] | select(.status == "critical")]'
+```
+
+Logs go to stderr, so stdout stays clean enough to pipe. The report files are
+still written as usual. Combine with `--fail-on` to both gate and capture:
+
+```bash
+python src/cli.py --json --fail-on critical > findings.json
+```
+
 ## Examples
 
 ### Basic Audit
@@ -177,9 +210,17 @@ reports:
 
 | Code | Meaning |
 |------|---------|
-| `0` | Success - audit completed |
-| `1` | Error - configuration failed to load |
-| `1` | Error - critical failure during execution |
+| `0` | Scan completed with no findings at or above the `--fail-on` level |
+| `1` | Warning-level findings (only with `--fail-on warning`) |
+| `2` | Critical or error findings (with `--fail-on warning` or `critical`) |
+| `3` | Could not run — unreadable config, or invalid command line |
+
+Codes `1` and `2` describe what the scan *found*; code `3` means the scan never
+produced a result. Keeping them apart lets a pipeline treat "this domain has an
+expiring certificate" differently from "the config file is missing".
+
+Without `--fail-on` (the default) a completed scan always exits `0`, whatever it
+found.
 
 ## Using with Make
 
