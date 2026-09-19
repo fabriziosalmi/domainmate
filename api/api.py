@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import FastAPI, BackgroundTasks, Request
+from loguru import logger
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -16,6 +17,7 @@ from src.monitors.dns_monitor import DNSMonitor
 from src.monitors.security_monitor import SecurityMonitor
 from src.monitors.blacklist_monitor import BlacklistMonitor
 from src.notifications.service import NotificationService
+from src.config import load_config, monitor_config
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -34,11 +36,20 @@ async def add_security_headers(request: Request, call_next):
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=()"
     return response
 
-domain_monitor = DomainMonitor()
-ssl_monitor = SSLMonitor()
-dns_monitor = DNSMonitor()
-security_monitor = SecurityMonitor()
-blacklist_monitor = BlacklistMonitor()
+# The API honours the same monitors.<name> settings as the CLI, so a threshold
+# tuned in config.yaml applies on both surfaces. A missing or broken config is
+# not fatal here — the API still serves with built-in defaults.
+try:
+    _config = load_config()
+except Exception as e:  # noqa: BLE001 - any failure falls back to defaults
+    logger.warning(f"Running with default monitor settings: {e}")
+    _config = {}
+
+domain_monitor = DomainMonitor.from_config(monitor_config(_config, "domain"))
+ssl_monitor = SSLMonitor.from_config(monitor_config(_config, "ssl"))
+dns_monitor = DNSMonitor.from_config(monitor_config(_config, "dns"))
+security_monitor = SecurityMonitor.from_config(monitor_config(_config, "security"))
+blacklist_monitor = BlacklistMonitor.from_config(monitor_config(_config, "blacklist"))
 notifier = NotificationService()
 
 DOMAIN_PATTERN = re.compile(

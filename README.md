@@ -30,7 +30,8 @@ DomainMate checks each configured domain sequentially across five monitors:
 DomainMate is built on Python 3.12. Checks run sequentially per domain.
 
 *   **DNS Layer**: Custom `RobustResolver` tries a pool of public DNS servers (Cloudflare, Google, Quad9, OpenDNS) and falls back to DNS-over-HTTPS (Cloudflare) if all fail.
-*   **Reporting**: Generates static, self-contained HTML reports with DataTables integration.
+*   **Reporting**: Generates static, self-contained HTML reports. Sorting, search,
+    grouping and filtering ship inside the file — no external scripts, no network.
 *   **Notification System**: Sends alerts via GitHub Issues, GitLab Issues, Telegram, Microsoft Teams, Email, and generic Webhooks. A `NotificationManager` (used separately from the CLI) adds deduplication and 24-hour cooldown.
 
 ## Installation

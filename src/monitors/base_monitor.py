@@ -18,6 +18,24 @@ class BaseMonitor(ABC):
     #: Override in each subclass (e.g. "domain", "ssl", …)
     monitor_name: str = "base"
 
+    def __init__(self,
+                 expiry_warning_days: int = EXPIRY_WARNING_DAYS,
+                 expiry_critical_days: int = EXPIRY_CRITICAL_DAYS):
+        self.expiry_warning_days = expiry_warning_days
+        self.expiry_critical_days = expiry_critical_days
+
+    @classmethod
+    def from_config(cls, cfg: dict = None):
+        """
+        Build the monitor from its ``monitors.<name>`` config section.
+        Subclasses that read other keys override this.
+        """
+        cfg = cfg or {}
+        return cls(
+            expiry_warning_days=cfg.get("expiry_warning_days", EXPIRY_WARNING_DAYS),
+            expiry_critical_days=cfg.get("expiry_critical_days", EXPIRY_CRITICAL_DAYS),
+        )
+
     # ── Public entry-point ────────────────────────────────────────────────────
 
     def check(self, domain: str) -> dict:
@@ -52,16 +70,13 @@ class BaseMonitor(ABC):
         return {"monitor": self.monitor_name, "status": STATUS_ERROR,
                 "message": message, **extra}
 
-    @staticmethod
-    def get_expiry_status(days: int,
-                          warning_threshold: int = EXPIRY_WARNING_DAYS,
-                          critical_threshold: int = EXPIRY_CRITICAL_DAYS) -> str:
+    def get_expiry_status(self, days: int) -> str:
         """
-        Return STATUS_OK / STATUS_WARNING / STATUS_CRITICAL based on days left.
-        Shared by DomainMonitor and SSLMonitor.
+        Return STATUS_OK / STATUS_WARNING / STATUS_CRITICAL based on days left,
+        using this instance's thresholds. Shared by DomainMonitor and SSLMonitor.
         """
-        if days < critical_threshold:
+        if days < self.expiry_critical_days:
             return STATUS_CRITICAL
-        if days < warning_threshold:
+        if days < self.expiry_warning_days:
             return STATUS_WARNING
         return STATUS_OK

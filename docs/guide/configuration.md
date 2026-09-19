@@ -168,9 +168,29 @@ reports:
   retention_days: 30         # Days to keep old reports (cleanup)
 ```
 
+::: warning
+`retention_days` is not implemented yet. Every run overwrites the same
+`index.html` and `report.json`, so there is no report history to prune. The key
+is accepted without a warning so the setting survives, and it starts taking
+effect once reports are kept per run.
+:::
+
+## Unknown Keys
+
+Every key is checked against the settings the code actually reads. A key that
+is not recognised is reported on startup:
+
+```
+WARNING | Unknown config key ignored: monitors.domain.expiry_warnings_days
+```
+
+A typo that looks applied but is not is worse than one that errors, so the
+warning names exactly where the key sits.
+
 Reports are generated as self-contained HTML files with:
-- Embedded CSS and JavaScript
-- DataTables for interactive filtering
+- Embedded CSS and JavaScript — no external requests, so a report opens with no
+  network and does not disclose who is reading it, or when
+- Sorting, search, grouping by domain and a status filter, all inline
 - Mobile-responsive design
 - No external dependencies
 

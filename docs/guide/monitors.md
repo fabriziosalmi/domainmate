@@ -139,6 +139,13 @@ monitors:
       - dmarc    # Domain-based Message Authentication
 ```
 
+**Supported values:** `spf`, `dmarc`, `mx`, `caa`. Anything else is logged as a
+warning and skipped rather than silently ignored — including `dkim`, which
+needs a selector the configuration does not carry.
+
+A domain is reported as a warning when any of the requested records is missing,
+and the result lists which ones under `required_records`.
+
 ### Records Checked
 
 #### SPF (Sender Policy Framework)

@@ -192,8 +192,10 @@ Used for hostname resolution in `get_connectable_hostname()` and by `BlacklistMo
 3. **Output:** Self-contained HTML file with embedded CSS and JavaScript
 
 **Report Features:**
-- DataTables for interactive filtering and sorting
-- Self-contained (no external dependencies at runtime)
+- Sorting, search, grouping by domain and status filtering, all in inline
+  vanilla JavaScript — a 35-row table does not need a 418 KB toolchain
+- Self-contained: no external scripts or stylesheets, so the report renders
+  offline and discloses nothing about who opens it
 - Mobile responsive
 
 ### 4. Notification System
