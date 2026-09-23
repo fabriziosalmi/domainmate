@@ -1,5 +1,41 @@
 # DomainMate
 
+> [!IMPORTANT]
+> **This project is archived. Its checks live in [CertMate](https://github.com/fabriziosalmi/certmate) now.**
+>
+> Everything DomainMate watched was about one thing — a domain name, and whether
+> it still works — and CertMate was already watching the certificate and the
+> registration for the same names. Keeping two tools meant configuring the same
+> estate twice and reading two answers about one domain.
+>
+> | DomainMate checked | Where it is now |
+> |---|---|
+> | WHOIS/RDAP expiry | CertMate, `domain_registration` — RDAP with a WHOIS fallback for the TLDs that have no RDAP |
+> | SSL certificate validity | CertMate's inventory and TLS probe, with **verified** OCSP/CRL revocation |
+> | SPF, DMARC, MX | CertMate, `domain_health` |
+> | RBL blacklists | CertMate, `domain_health` — and see below |
+> | HSTS, X-Frame-Options, X-Content-Type-Options, CSP | CertMate, `domain_health` |
+> | `Server` / `X-Powered-By` version disclosure | CertMate, `domain_health` |
+> | Weak TLS versions (1.0/1.1) accepted | **not carried over** |
+>
+> Two of these got more careful on the way across, both in ways that changed the
+> answer:
+>
+> - **The blocklist check here reported "not listed" for a query that had been
+>   refused.** It recognised Spamhaus's `127.255.255.x` codes, logged a warning,
+>   and returned not-listed anyway. CertMate treats a refusal as *unknown*, and
+>   because a refusal forwarded through a resolver often arrives as plain
+>   NXDOMAIN — indistinguishable from "not listed" — it asks each list about its
+>   own always-listed test point first and drops the ones that cannot answer.
+> - **`Server: cloudflare` was reported here as "Server Version Disclosed".**
+>   CertMate reports it only when the header carries a version, because that is
+>   what an attacker can look a CVE up against.
+>
+> Start here: [Domain health](https://github.com/fabriziosalmi/certmate/blob/main/docs/discovery-inventory.md#domain-health)
+> and [Domain registration expiry](https://github.com/fabriziosalmi/certmate/blob/main/docs/discovery-inventory.md#domain-registration-expiry).
+>
+> The code below still works and stays readable. It is not maintained.
+
 DomainMate is a domain and security monitoring tool. It checks WHOIS expiration dates, SSL certificate validity, DNS security records (SPF, DMARC), HTTP security headers, and IP reputation against common RBL blacklists.
 
 ![screenshot](screenshot.png)
