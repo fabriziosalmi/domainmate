@@ -4,13 +4,16 @@ layout: home
 hero:
   name: "DomainMate"
   text: "Domain & Security Monitoring"
-  tagline: A Python tool that checks domain expiration, SSL certificates, DNS security records, HTTP headers, and IP blacklist status.
+  tagline: "Archived. These checks live in CertMate now — see the note below."
   image:
     src: /report-preview.png
     alt: DomainMate Dashboard
   actions:
     - theme: brand
-      text: Get Started
+      text: Go to CertMate
+      link: https://github.com/fabriziosalmi/certmate
+    - theme: alt
+      text: Get Started (archived)
       link: /getting-started
     - theme: alt
       text: View on GitHub
